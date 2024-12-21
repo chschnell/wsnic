@@ -26,7 +26,7 @@ sudo ./wsnic.py
 
 *NOTE: This is still WIP*
 
-**Install Apache2 and enabke required modules:**
+**Install Apache2 and enable required modules:**
 
 ```
 sudo apt install apache2
@@ -37,12 +37,14 @@ sudo a2enmod ssl proxy proxy_http proxy_wstunnel
 
 **Create a self-signed certificate:**
 
+You must replace `PRIMARY_HOSTNAME` with the hostname of your Apache2 server. Using the optional extension `subjectAltName` you may add any number of alternate `DNS` (replace `ALT_HOSTNAME`) and/or `IP` (replace `IP_ADDRESS`) addresses to the generated certificate.
+
 ```
 cd /path/to/certificate
 
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
-  -nodes -keyout cert.key -out cert.crt -subj "/CN=build-any" \
-  -addext "subjectAltName=DNS:build-any.rekoba.de,DNS:localhost,IP:10.0.10.74"
+  -nodes -keyout cert.key -out cert.crt -subj "/CN=PRIMARY_HOSTNAME" \
+  -addext "subjectAltName=DNS:ALT_HOSTNAME,IP:IP_ADDRESS"
 ```
 
 **Edit default-ssl.conf:**
