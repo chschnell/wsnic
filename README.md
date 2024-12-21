@@ -8,7 +8,7 @@
 
 ## Installation
 
-After cloning this repository, install `websockets` and `scapy` using pip into your working copy:
+After cloning this repository, install `websockets` and `scapy` into your working copy using pip:
 
 ```bash
 cd wsnic
