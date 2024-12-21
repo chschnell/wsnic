@@ -1,0 +1,63 @@
+#
+# wsnic.conf
+#
+
+#
+# WebSocket server address, use 0.0.0.0 to listen on all interfaces
+#
+ws_server_addr=127.0.0.1
+
+#
+# WebSocket server port
+#
+ws_server_port=8070
+
+#
+# Interface name of your existing physical NIC
+#
+eth_iface=eth0
+
+#
+# Interface name of the TAP device created by wsnic
+#
+tap_iface=wstap0
+
+#
+# TAP device address and subnet
+#
+tap_addr=192.168.2.1/24
+
+#
+# DHCP domain (optional, allowed to be empty)
+#
+dhcp_domain=
+
+#
+# DHCP IP address pool
+#
+dhcp_pool=192.168.2.128/25
+
+#
+# DHCP subnet
+#
+dhcp_network=192.168.2.0/24
+
+#
+# DHCP gateway IP address
+#
+dhcp_gw=192.168.2.1
+
+#
+# DHCP DNS server IP addresses (0, 1 or 2 space-separated server IP addresses are supported)
+#
+dhcp_nameserver=8.8.8.8 8.8.4.4
+
+#
+# DHCP lease time in seconds
+#
+dhcp_lease_time=86400
+
+#
+# DHCP lease renewal time in seconds
+#
+dhcp_renewal_time=600
