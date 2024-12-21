@@ -16,10 +16,28 @@ python3 -m venv venv
 venv/bin/pip3 install websockets scapy
 ```
 
-Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed. Start `wsnic` using:
+Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed.
 
+## Usage
+
+Start `wsnic` using:
+ 
 ```bash
 sudo ./wsnic.py
+```
+
+Command line options:
+
+```
+$ ./wsnic.py -h
+usage: wsnic [-h] [-c CONF_FILE] [-r]
+
+WebSocket to TAP device proxy server.
+
+options:
+  -h, --help    show this help message and exit
+  -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
+  -r            release TAP device resources
 ```
 
 ## Optional: wss-to-ws conversion with Apache2 (Debian 12)
