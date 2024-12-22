@@ -20,7 +20,7 @@ eth_iface=eth0
 #
 # Interface name of the TAP device created by wsnic
 #
-tap_iface=wstap0
+tap_iface=wsnic0
 
 #
 # TAP device address and subnet

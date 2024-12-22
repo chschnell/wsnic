@@ -24,7 +24,7 @@ class Config:
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
         self.eth_iface = 'eth0'
-        self.tap_iface = 'wstap0'
+        self.tap_iface = 'wsnic0'
         self.tap_addr = '192.168.2.1/24'
         self.dhcp_domain = None
         self.dhcp_pool = '192.168.2.128/25'
