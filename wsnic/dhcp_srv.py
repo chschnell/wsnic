@@ -317,7 +317,7 @@ class DhcpNetwork:
             self.ip = ip
             self.mac = None
             self.reserved_tm = 0
-            self.is_bound = False
+            self.is_assigned = False
 
     def __init__(self, config):
         self.hosts = []     ## array(Host host, ...)
@@ -343,7 +343,7 @@ class DhcpNetwork:
             selected_host = self.mac2host[mac]
         else:
             for host in self.hosts:
-                if host.is_bound:
+                if host.is_assigned:
                     continue
                 elif selected_host is None or host.reserved_tm < selected_host.reserved_tm:
                     selected_host = host
@@ -363,8 +363,8 @@ class DhcpNetwork:
     def assign_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
-            if not host.is_bound:
-                host.is_bound = True
+            if not host.is_assigned:
+                host.is_assigned = True
                 print(f'DHCP: assigned IP address {host.ip} to MAC {mac2str(mac)}')
             else:
                 print(f'DHCP: re-assigned IP address {host.ip} to MAC {mac2str(mac)}')
@@ -372,6 +372,6 @@ class DhcpNetwork:
     def release_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
-            if host.is_bound:
-                host.is_bound = False
+            if host.is_assigned:
+                host.is_assigned = False
                 print(f'DHCP: released IP address {host.ip}')
