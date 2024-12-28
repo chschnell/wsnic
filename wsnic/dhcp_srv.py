@@ -341,8 +341,6 @@ class DhcpNetwork:
         selected_host = None
         if mac in self.mac2host:
             selected_host = self.mac2host[mac]
-            if selected_host.is_bound:
-                print(f'DHCP: warning: IP address {selected_host.ip} is still assigned to same MAC')
         else:
             for host in self.hosts:
                 if host.is_bound:
@@ -365,11 +363,15 @@ class DhcpNetwork:
     def assign_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
-            host.is_bound = True
-            print(f'DHCP: assigned IP address {host.ip} to MAC {mac2str(mac)}')
+            if not host.is_bound:
+                host.is_bound = True
+                print(f'DHCP: assigned IP address {host.ip} to MAC {mac2str(mac)}')
+            else:
+                print(f'DHCP: re-assigned IP address {host.ip} to MAC {mac2str(mac)}')
 
     def release_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
-            host.is_bound = False
-            print(f'DHCP: released IP address {host.ip}')
+            if host.is_bound:
+                host.is_bound = False
+                print(f'DHCP: released IP address {host.ip}')
