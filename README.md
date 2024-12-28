@@ -1,19 +1,19 @@
 **wsnic** is a WebSocket to TAP device proxy server for linux.
 
-* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a local [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) and an open number of WebSocket clients (OSI layer 2)
+* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a local [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) and an open number of WebSocket clients
 * uses [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
-* uses [scapy](https://scapy.net/) to provide a simple DHCP service tied to the TAP device for WebSocket clients
+* provides built-in DHCP service on the TAP device answering to WebSocket clients
 * uses a single [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and the TAP device
 * sends periodic PINGs to idle WebSocket clients
 
 ## Installation
 
-After cloning this repository, install `websockets` and `scapy` into your working copy using pip:
+After cloning this repository, install `websockets` into your working copy using pip:
 
 ```bash
 cd wsnic
 python3 -m venv venv
-venv/bin/pip3 install websockets scapy
+venv/bin/pip3 install websockets
 ```
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed.
@@ -23,21 +23,20 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 Start `wsnic` using:
  
 ```bash
-sudo ./wsnic.py
+sudo ./wsnic.sh
 ```
 
 Command line options:
 
 ```
-$ ./wsnic.py -h
-usage: wsnic [-h] [-c CONF_FILE] [-r]
+$ ./wsnic.sh -h
+usage: wsnic [-h] [-c CONF_FILE]
 
 WebSocket to TAP device proxy server.
 
 options:
   -h, --help    show this help message and exit
   -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
-  -r            release TAP device resources
 ```
 
 ## Optional: wss-to-ws conversion with Apache2 (Debian 12)

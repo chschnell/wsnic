@@ -3,7 +3,8 @@
 #
 
 #
-# WebSocket server address, use 0.0.0.0 to listen on all interfaces
+# WebSocket server address
+# - use 0.0.0.0 to listen on all interfaces
 #
 ws_server_addr=127.0.0.1
 
@@ -13,51 +14,40 @@ ws_server_addr=127.0.0.1
 ws_server_port=8070
 
 #
-# Interface name of your existing physical NIC
+# Interface name of your existing upstream NIC
 #
 eth_iface=eth0
 
 #
-# Interface name of the TAP device created by wsnic
-#
-tap_iface=wsnic0
-
-#
-# TAP device address and subnet
-#
-tap_addr=192.168.2.1/24
-
-#
-# DHCP domain (optional, allowed to be empty)
-#
-dhcp_domain=
-
-#
-# DHCP IP address pool
-#
-dhcp_pool=192.168.2.128/25
-
-#
-# DHCP subnet
+# DHCP network subnet
+# - network's first and last IP addresses are reserved as network and broadcast addresses
+# - network's second IP address is reserved for the DHCP server IP
+# - remaining IP addresses are used for the DHCP address pool
+# - example for the default network 192.168.2.0/24:
+#   - network address: 192.168.2.0
+#   - broadcast address: 192.168.2.255
+#   - DHCP server address: 192.168.2.1
+#   - DHCP address pool: 192.168.2.2, 192.168.2.3, ..., 192.168.2.254
 #
 dhcp_network=192.168.2.0/24
 
 #
-# DHCP gateway IP address
+# DHCP gateway IP address (optional, defaults to DHCP server IP)
 #
-dhcp_gw=192.168.2.1
+dhcp_gateway=
 
 #
-# DHCP DNS server IP addresses (0, 1 or 2 space-separated server IP addresses are supported)
+# DHCP domain (optional)
 #
-dhcp_nameserver=8.8.8.8 8.8.4.4
+dhcp_domain=
+
+#
+# DHCP DNS server IP addresses
+# - optional, 0 or any number of Domain Name Server IP addresses
+#
+dhcp_nameserver=8.8.8.8, 8.8.4.4
 
 #
 # DHCP lease time in seconds
 #
 dhcp_lease_time=86400
-
-#
-# DHCP lease renewal time in seconds
-#
-dhcp_renewal_time=600
