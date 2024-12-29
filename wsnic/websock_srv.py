@@ -3,8 +3,7 @@
 ## WebSocket server classes based on websockets.
 ##
 
-import socket, time
-from collections import deque
+import logging, socket, time
 
 from websockets.server import ServerProtocol
 from websockets.http11 import Request
@@ -12,6 +11,8 @@ from websockets.frames import Frame, Opcode
 
 from wsnic import Pollable, FrameQueue
 from wsnic.tap_dev import TapDevice
+
+logger = logging.getLogger('websock')
 
 class WebSocketServer(Pollable):
     def __init__(self, server):
@@ -28,7 +29,7 @@ class WebSocketServer(Pollable):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.listen(1)
         super().open(self.sock.fileno())
-        print(f'{self.addr}: WebSocket server listening')
+        logger.info(f'{self.addr}: WebSocket server listening')
 
     def close(self):
         super().close()
@@ -39,7 +40,7 @@ class WebSocketServer(Pollable):
         if self.sock:
             self.sock.close()
             self.sock = None
-            print(f'{self.addr}: WebSocket server closed')
+            logger.info(f'{self.addr}: WebSocket server closed')
 
     def recv_ready(self):
         sock, addr = self.sock.accept()
@@ -48,7 +49,7 @@ class WebSocketServer(Pollable):
         ws_client = WebSocketClient(self.server)
         ws_client.open(sock, addr)
         self.ws_clients.append(ws_client)
-        print(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
+        logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
 
 class WebSocketClient(Pollable):
     def __init__(self, server):
@@ -78,7 +79,7 @@ class WebSocketClient(Pollable):
         if self.sock is not None:
             self.sock.close()
             self.sock = None
-            print(f'{self.addr}: WebSocket client disconnected')
+            logger.info(f'{self.addr}: WebSocket client disconnected')
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
@@ -92,14 +93,14 @@ class WebSocketClient(Pollable):
                 self.out.trim_frame(n_sent)
             except OSError as e:
                 self.close()
-                print(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
+                logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
 
     def recv_ready(self):
         try:
             ws_frame = self.sock.recv(65535)
         except OSError as e:
             ws_frame = b''
-            print(f'{self.addr}: WebSocket client disconnected at recv(), reason: {e}')
+            logger.debug(f'{self.addr}: WebSocket client disconnected at recv(), reason: {e}')
         if ws_frame:
             self.recv(ws_frame)
             self.last_recv_tm = time.time()
@@ -130,14 +131,14 @@ class WebSocketClient(Pollable):
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)
                 elif ev.opcode != Opcode.PONG and ev.opcode != Opcode.CLOSE:
-                    print(f'{self.addr}: received unhandled WebSocket packet: {ev.opcode} {ev}')
+                    logger.warning(f'{self.addr}: received unhandled WebSocket packet: {ev.opcode} {ev}')
             elif isinstance(ev, Request) and self.tap_dev is None:
                 self.tap_dev = TapDevice(self.server, self)
                 self.tap_dev.open()
                 self.proto.send_response(self.proto.accept(ev))
-                print(f'{self.addr}: accepted WebSocket client connection')
+                logger.info(f'{self.addr}: accepted WebSocket client connection')
             else:
-                print(f'{self.addr}: *** received unexpected ws packet: {ev}')
+                logger.error(f'{self.addr}: received unexpected ws packet: {ev}')
             self._pump()
 
     def _pump(self):

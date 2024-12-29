@@ -8,10 +8,12 @@
 ## - https://github.com/russdill/lwip-udhcpd/blob/master/udhcp_common.c
 ## - https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol
 
-import struct, socket, functools, enum, time
+import logging, struct, socket, functools, enum, time
 from collections import namedtuple
 
 from wsnic import Pollable, mac2str
+
+logger = logging.getLogger('dhcp')
 
 ## DhcpPacket.op values
 DHCP_OP_NONE = 0
@@ -32,6 +34,12 @@ DHCP_MSG_TYPE_RELEASE = 7
 DHCP_MSG_TYPE_INFORM = 8
 
 DHCP_MAGIC_COOKIE = b'\x63\x82\x53\x63'
+
+## UDP port numbers
+DHCP_SERVER_PORT = 67
+DHCP_CLIENT_PORT = 68
+
+BROADCAST_ADDR = '255.255.255.255'
 
 class OptionType:
     Type = namedtuple('Type', ['typename', 'encode', 'decode'])
@@ -145,11 +153,11 @@ class DhcpPacket:
         return pkt
 
     def dump(self, prefix):
-        print(f'{prefix}: op={self.op} htype={self.htype} hlen={self.hlen} ' \
+        return f'{prefix}: op={self.op} htype={self.htype} hlen={self.hlen} ' \
             f'hops={self.hops} xid={hex(self.xid)} secs={self.secs} ' \
             f'flags={self.flags} ciaddr={self.ciaddr} yiaddr={self.yiaddr} ' \
             f'siaddr={self.siaddr} giaddr={self.giaddr} chaddr={self.chaddr.hex()} ' \
-            f'sname={self.sname} filename={self.filename}\n  options={self.options}')
+            f'sname={self.sname} filename={self.filename} options={self.options}'
 
     def to_bytes(self):
         result = bytearray(struct.pack('!BBBBIHH4s4s4s4s16s64s128s4s', self.op, self.htype,
@@ -158,7 +166,7 @@ class DhcpPacket:
             socket.inet_aton(self.siaddr), socket.inet_aton(self.giaddr),
             self.chaddr, self.sname.encode(), self.filename.encode(), DHCP_MAGIC_COOKIE))
         for opt_enum, opt_val in self.options.items():
-            #print(f'DHCP: encoding option {opt_enum.name} ({opt_enum.value}) val={opt_val}')
+            logger.debug(f'encoding option {opt_enum.name} ({opt_enum.value}) val={opt_val}')
             result.extend(opt_enum.encode(opt_val))
         result.extend(b'\xff')
         return result
@@ -172,10 +180,10 @@ class DhcpPacket:
             struct.unpack('!BBBBIHH4s4s4s4s16s64s128s4s', data[ : 240 ])
 
         if magic_cookie != DHCP_MAGIC_COOKIE:
-            print('DHCP: package with invalid magic cookie refused')
+            logger.debug('package with invalid magic cookie refused')
             return None
         elif pkt.op != DHCP_OP_REQUEST:
-            print('DHCP: non-request package refused')
+            logger.debug('non-request package refused')
             return None
 
         pkt.ciaddr = socket.inet_ntoa(ciaddr)
@@ -199,11 +207,11 @@ class DhcpPacket:
             try:
                 opt_enum = OptionEnum(opt_code)
             except ValueError:
-                print(f'DHCP: {opt_cursor}: note: skipping unknown Option opt_code={opt_code} opt_len={opt_len}')
+                logger.debug(f'skipping unknown Option opt_code={opt_code} opt_len={opt_len}')
             else:
                 opt_val = opt_enum.decode(opt_data, opt_cursor, opt_len)
                 pkt.options[opt_enum] = opt_val
-                #print(f'DHCP: {opt_cursor}: decoded option opt_code={opt_enum.name} ({opt_code}) opt_len={opt_len} opt_val={opt_val}')
+                logger.debug(f'decoded option opt_code={opt_enum.name} ({opt_code}) opt_len={opt_len} opt_val={opt_val}')
             opt_cursor += opt_len
         return pkt
 
@@ -215,15 +223,14 @@ class DhcpServer(Pollable):
 
     def __init__(self, server):
         super().__init__(server)
-        self.dhcp_network = server.dhcp_network
         self.sock = None
 
     def open(self, iface):
-        print(f'DHCP: server listening on interface {iface}')
+        logger.info(f'server listening on interface {iface}')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, iface.encode())
-        self.sock.bind(('', 67))    ## 67: DHCP server, 68: DHCP client
+        self.sock.bind(('0.0.0.0', DHCP_SERVER_PORT))
         self.sock.setblocking(0)
         super().open(self.sock.fileno())
 
@@ -232,18 +239,17 @@ class DhcpServer(Pollable):
         if self.sock is not None:
             self.sock.close()
             self.sock = None
-            print(f'DHCP: server closed')
+            logger.info(f'server closed')
 
     def recv_ready(self):
         data, addr = self.sock.recvfrom(65535)
 
         pkt_in = DhcpPacket.from_bytes(data)
         if not pkt_in:
-            print(f'DHCP: non-DHCP packet dropped')
             return
 
-        #print()
-        #pkt_in.dump(f'{addr[0]}:{addr[1]}: RECV[{len(data)}]')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(pkt_in.dump(f'{addr[0]}:{addr[1]}: RECV[{len(data)}]'))
 
         reply_msg_type = None
         client_mac = pkt_in.chaddr[ : pkt_in.hlen ]
@@ -251,22 +257,22 @@ class DhcpServer(Pollable):
 
         request_msg_type = pkt_in.options[OptionEnum.MSG_TYPE]
         if request_msg_type == DHCP_MSG_TYPE_DISCOVER:
-            client_ip = self.dhcp_network.reserve_address(client_mac)
+            client_ip = self.server.dhcp_network.reserve_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_OFFER
         elif request_msg_type == DHCP_MSG_TYPE_REQUEST:
-            client_ip = self.dhcp_network.find_address(client_mac)
+            client_ip = self.server.dhcp_network.find_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_ACK
-                self.dhcp_network.assign_address(client_mac)
+                self.server.dhcp_network.assign_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_DECLINE:
             pass
         elif request_msg_type == DHCP_MSG_TYPE_RELEASE:
-            self.dhcp_network.release_address(client_mac)
+            self.server.dhcp_network.release_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_INFORM:
             pass
         else:
-            print(f'DHCP: packet with unexpected Message Type Option {request_msg_type} dropped')
+            logger.warning(f'packet with unexpected Message Type Option {request_msg_type} dropped')
             return
 
         if reply_msg_type is None:
@@ -301,16 +307,17 @@ class DhcpServer(Pollable):
                 try:
                     opt_enum = OptionEnum(opt_code)
                 except ValueError:
-                    print(f'DHCP: skipped requested Option with unknown code {opt_code}')
+                    logger.warning(f'DHCP: skipped requested Option with unknown code {opt_code}')
                 else:
                     if opt_enum not in pkt_out.options and opt_enum not in self.IGNORED_OPTIONS:
-                        print(f'DHCP: skipped requested Option {opt_enum}')
+                        logger.debug(f'DHCP: skipped requested Option {opt_enum}')
 
         bytes_out = pkt_out.to_bytes()
-        #print()
-        #pkt_out.dump(f'255.255.255.255:68: SEND[{len(bytes_out)}]')
 
-        self.sock.sendto(bytes_out, ('255.255.255.255', 68))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(pkt_out.dump(f'{BROADCAST_ADDR}:{DHCP_CLIENT_PORT}: SEND[{len(bytes_out)}]'))
+
+        self.sock.sendto(bytes_out, (BROADCAST_ADDR, DHCP_CLIENT_PORT))
 
 class DhcpNetwork:
     class Host:
@@ -351,14 +358,14 @@ class DhcpNetwork:
         if mac in self.mac2host:
             host = self.mac2host[mac]
             if host.is_assigned:
-                print(f'DHCP: re-assigned IP address {host.ip} to MAC {mac2str(mac)}')
+                logger.info(f're-assigned IP address {host.ip} to MAC {mac2str(mac)}')
             else:
                 host.is_assigned = True
-                print(f'DHCP: assigned IP address {host.ip} to MAC {mac2str(mac)}')
+                logger.info(f'assigned IP address {host.ip} to MAC {mac2str(mac)}')
 
     def release_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
             if host.is_assigned:
                 host.is_assigned = False
-                print(f'DHCP: released IP address {host.ip}')
+                logger.info(f'released IP address {host.ip}')

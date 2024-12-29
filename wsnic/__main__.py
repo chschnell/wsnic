@@ -3,14 +3,17 @@
 ## Main entry point.
 ##
 
-import os, re, configparser, argparse, time, ipaddress, select
+import os, re, logging, configparser, argparse, time, ipaddress, select
 
 from wsnic.websock_srv import WebSocketServer
 from wsnic.tap_dev import TapBridge
 from wsnic.dhcp_srv import DhcpNetwork
 
+logger = logging.getLogger('main')
+
 class Config:
     def __init__(self):
+        ## settings that can be overriden in parse_conf()
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
         self.eth_iface = 'eth0'
@@ -20,7 +23,7 @@ class Config:
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
         self.dhcp_lease_time = 86400
-
+        ## settings assigned in finalize()
         self.bridge_addr = None
         self.host_addrs = None
         self.broadcast_addr = None
@@ -43,7 +46,7 @@ class Config:
                     opt_value = None
                 setattr(self, opt_name, opt_value)
             else:
-                print(f'{conf_filename}: warning: unknown option "{opt_name}" ignored')
+                logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
 
     def finalize(self):
         subnet = ipaddress.ip_network(self.bridge_subnet)
@@ -68,7 +71,7 @@ class WsnicServer:
 
     def register_pollable(self, fd, pollable, epoll_flags):
         if fd in self.pollables:
-            print(f'warning: fd {fd} already in use by pollable {self.pollables[fd]}, overwriting!')
+            logger.warning(f'fd {fd} already in use by pollable {self.pollables[fd]}, overwriting!')
         self.pollables[fd] = pollable
         self.epoll.register(fd, epoll_flags)
 
@@ -88,7 +91,6 @@ class WsnicServer:
         self.ws_server = WebSocketServer(self)
         self.ws_server.open()
 
-        print('wsnic ready, press CTRL+C to exit')
         last_refresh_tm = time.time()
         terminated = False
         while not terminated:
@@ -102,7 +104,7 @@ class WsnicServer:
                     pollable.send_ready()
                 if ev & select.EPOLLHUP:
                     if pollable == self.ws_server:
-                        print(f'*** received unexpected hangup from WebSocket server socket, terminating')
+                        logger.error(f'received unexpected hangup from WebSocket server socket, terminating')
                         terminated = True
                         break
                     else:
@@ -125,11 +127,16 @@ def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to TAP device proxy server.')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
+    parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
     args = parser.parse_args()
 
     if os.geteuid() != 0:
-        print(f'must be root to execute {parser.prog}')
+        print(f'error: must be run by root')
         return
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
+    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets
 
     config = Config()
     if os.path.isfile(args.conf):

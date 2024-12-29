@@ -9,11 +9,13 @@
 ## - https://github.com/mirceaulinic/py-dhcp-relay
 ## - https://gist.github.com/firaxis/0e538c8e5f81eaa55748acc5e679a36e
 
-import os, struct, fcntl
+import os, logging, struct, fcntl
 from subprocess import run
 
 from wsnic import Pollable, FrameQueue
 from wsnic.dhcp_srv import DhcpServer
+
+logger = logging.getLogger('tap')
 
 TAP_CLONE_DEVICE = '/dev/net/tun'
 
@@ -49,7 +51,7 @@ class TapBridge:
             run(['sysctl', '-w', 'net.ipv4.ip_forward=1'], check=True)
         self._install_nat_rules(True)
 
-        print(f'{self.br_iface}: TAP bridge created')
+        logger.info(f'{self.br_iface}: TAP bridge created')
 
         ## install DHCP server on bridge
         self.dhcp_server = DhcpServer(self.server)
@@ -67,7 +69,7 @@ class TapBridge:
 
         run(['ip', 'link', 'del', self.br_iface])
 
-        print(f'{self.br_iface}: TAP bridge closed')
+        logger.info(f'{self.br_iface}: TAP bridge closed')
         self.is_opened = False
 
     def _install_nat_rules(self, do_install):
@@ -102,14 +104,14 @@ class TapDevice(Pollable):
         ## attach TAP device to bridge and bring it up
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], check=True)
-        print(f'{self.tap_iface}: TAP device created')
+        logger.info(f'{self.tap_iface}: TAP device created')
 
     def close(self):
         fd = self.fd
         super().close()
         if fd is not None:
             os.close(fd)
-            print(f'{self.tap_iface}: TAP device closed')
+            logger.info(f'{self.tap_iface}: TAP device closed')
 
     def send(self, eth_frame):
         if len(eth_frame):

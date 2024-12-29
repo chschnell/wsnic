@@ -31,13 +31,14 @@ Command line options:
 
 ```
 $ ./wsnic.sh -h
-usage: wsnic [-h] [-c CONF_FILE]
+usage: wsnic [-h] [-c CONF_FILE] [-v]
 
 WebSocket to TAP device proxy server.
 
 options:
   -h, --help    show this help message and exit
   -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
+  -v            print verbose output
 ```
 
 ## Network architecture
