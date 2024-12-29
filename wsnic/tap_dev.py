@@ -30,7 +30,7 @@ class TapBridge:
         self.br_iface = br_iface                        ## string, 'wsnicbr0'
         self.br_ip = server.dhcp_network.server_ip      ## string, '192.168.2.1'
         self.br_netmask = server.dhcp_network.netmask   ## string, '255.255.255.0'
-        self.br_restrict_inbound = server.dhcp_network.bridge_restrict_inbound
+        self.br_restrict_inbound = server.config.bridge_restrict_inbound
         self.dhcp_server = None
 
     def open(self):
