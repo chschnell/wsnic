@@ -9,94 +9,109 @@
 ## - https://github.com/mirceaulinic/py-dhcp-relay
 ## - https://gist.github.com/firaxis/0e538c8e5f81eaa55748acc5e679a36e
 
-import os, struct, fcntl, socket
+import os, struct, fcntl
 from subprocess import run
 
 from wsnic import Pollable, FrameQueue
-from wsnic.dhcp_srv import DhcpListener
+from wsnic.dhcp_srv import DhcpServer
 
 TAP_CLONE_DEVICE = '/dev/net/tun'
 
-TUNSETIFF      = 0x400454ca
-SIOCGIFFLAGS   = 0x00008913
-SIOCSIFFLAGS   = 0x00008914
-SIOCSIFADDR    = 0x00008916
-SIOCSIFNETMASK = 0x0000891C
+TUNSETIFF = 0x400454ca
 
-IFF_UP    = 0x1
-IFF_TAP   = 0x0002
+IFF_TAP = 0x0002
 IFF_NO_PI = 0x1000
 
+class TapBridge:
+    def __init__(self, server, br_iface):
+        self.server = server
+        self.is_opened = False
+        self.eth_iface = server.config.eth_iface        ## string, 'eth0'
+        self.br_iface = br_iface                        ## string, 'wsnicbr0'
+        self.br_ip = server.dhcp_network.server_ip      ## string, '192.168.2.1'
+        self.br_netmask = server.dhcp_network.netmask   ## string, '255.255.255.0'
+        self.br_restrict_inbound = server.dhcp_network.bridge_restrict_inbound
+        self.dhcp_server = None
+
+    def open(self):
+        if self.is_opened:
+            return
+        self.is_opened = True
+
+        ## create bridge
+        run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge'], check=True)
+        run(['ip', 'addr', 'add', f'{self.br_ip}/{self.br_netmask}', 'dev', self.br_iface], check=True)
+        run(['ip', 'link', 'set', self.br_iface, 'up'], check=True)
+
+        ## setup bridge NAT rules
+        if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
+            with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
+                f_out.write('1\n')
+        else:
+            run(['sysctl', '-w', 'net.ipv4.ip_forward=1'], check=True)
+        self._install_nat_rules(True)
+
+        print(f'{self.br_iface}: TAP bridge created')
+
+        ## install DHCP server on bridge
+        self.dhcp_server = DhcpServer(self.server)
+        self.dhcp_server.open(self.br_iface)
+
+    def close(self):
+        if not self.is_opened:
+            return
+
+        if self.dhcp_server:
+            self.dhcp_server.close()
+            self.dhcp_server = None
+
+        self._install_nat_rules(False)
+
+        run(['ip', 'link', 'del', self.br_iface])
+
+        print(f'{self.br_iface}: TAP bridge closed')
+        self.is_opened = False
+
+    def _install_nat_rules(self, do_install):
+        cmd = '-A' if do_install else '-D'
+        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'], check=do_install)
+        run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'], check=do_install)
+        if self.br_restrict_inbound:
+            run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.br_iface,
+                '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], check=do_install)
+        else:
+            run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.br_iface, '-j', 'ACCEPT'], check=do_install)
+
 class TapDevice(Pollable):
-    def __init__(self, server):
+    def __init__(self, server, ws_client):
         super().__init__(server)
-        self.eth_iface = None       ## string, upstream interface name (for example: eth0)
+        self.ws_client = ws_client
+        self.br_iface = server.tap_bridge.br_iface
         self.tap_iface = None       ## string, TAP device name (for example: wsnic0)
-        self.dhcp_listener = None   ## DhcpListener
         self.out = FrameQueue()     ## frames waiting to be send to tap device
 
-    def open(self, eth_iface, tap_ip, tap_netmask):
-        self.eth_iface = eth_iface
-
+    def open(self):
         ## open TAP clone device
         self.fd = os.open(TAP_CLONE_DEVICE, os.O_RDWR | os.O_NONBLOCK)
+        super().open(self.fd)
         os.set_blocking(self.fd, False)
 
         ## create TAP device
         ifreq = struct.pack('16sH', 'wsnic%d'.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
-        tap_iface_enc = tunsetiff_result[ : 16].rstrip(b'\0')
-        self.tap_iface = tap_iface_enc.decode()
-        print(f'{self.tap_iface}: TAP device created, setting IP to {tap_ip} and netmask to {tap_netmask}')
+        self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, tap_iface_enc)
-            sockfd = sock.fileno()
-
-            ## set TAP device IP address
-            ifreq = struct.pack('16sH2s4s8s', tap_iface_enc, socket.AF_INET, b'\x00'*2, socket.inet_aton(tap_ip), b'\x00'*8)
-            fcntl.ioctl(sockfd, SIOCSIFADDR, ifreq)
-
-            ## set TAP device netmask
-            ifreq = struct.pack('16sH2s4s8s', tap_iface_enc, socket.AF_INET, b'\x00'*2, socket.inet_aton(tap_netmask), b'\x00'*8) 
-            fcntl.ioctl(sockfd, SIOCSIFNETMASK, ifreq)
-
-            ## bring TAP device up
-            ifreq = struct.pack('16sh', tap_iface_enc, 0)
-            flags = struct.unpack('16sh', fcntl.ioctl(sockfd, SIOCGIFFLAGS, ifreq))[1]
-            ifreq = struct.pack('16sh', tap_iface_enc, flags | IFF_UP)
-            fcntl.ioctl(sockfd, SIOCSIFFLAGS, ifreq)
-        finally:
-            sock.close()
-
-        ## setup NAT rules for TAP device
-        run(['iptables', '-A', 'POSTROUTING', '-t', 'nat', '-o', eth_iface, '-j', 'MASQUERADE'], check=True)
-        run(['iptables', '-A', 'FORWARD', '-i', eth_iface, '-o', self.tap_iface, '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], check=True)
-        run(['iptables', '-A', 'FORWARD', '-i', self.tap_iface, '-o', eth_iface, '-j', 'ACCEPT'], check=True)
-
-        ## setup DHCP listener on TAP device
-        self.dhcp_listener = DhcpListener(self.server)
-        self.dhcp_listener.open(self.tap_iface)
-        
-        super().open(self.fd)
+        ## attach TAP device to bridge and bring it up
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], check=True)
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], check=True)
+        print(f'{self.tap_iface}: TAP device created')
 
     def close(self):
-        if self.dhcp_listener:
-            self.dhcp_listener.close()
-            self.dhcp_listener = None
         fd = self.fd
         super().close()
-        if fd is None:
-            return
-        os.close(fd)
-        if self.tap_iface is None:
-            return
-        run(['iptables', '-D', 'FORWARD', '-i', self.tap_iface, '-o', self.eth_iface, '-j', 'ACCEPT'])
-        run(['iptables', '-D', 'FORWARD', '-i', self.eth_iface, '-o', self.tap_iface, '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'])
-        run(['iptables', '-D', 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'])
-        print(f'{self.tap_iface}: TAP device closed')
-        self.tap_iface = None
+        if fd is not None:
+            os.close(fd)
+            print(f'{self.tap_iface}: TAP device closed')
 
     def send(self, eth_frame):
         if len(eth_frame):
@@ -113,4 +128,4 @@ class TapDevice(Pollable):
             self.out.trim_frame(os.write(self.fd, eth_frame))
 
     def recv_ready(self):
-        self.server.relay_to_ws_client(os.read(self.fd, 65535))
+        self.ws_client.send(os.read(self.fd, 65535))

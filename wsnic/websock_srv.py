@@ -10,13 +10,15 @@ from websockets.server import ServerProtocol
 from websockets.http11 import Request
 from websockets.frames import Frame, Opcode
 
-from wsnic import Pollable, FrameQueue, mac2str
+from wsnic import Pollable, FrameQueue
+from wsnic.tap_dev import TapDevice
 
 class WebSocketServer(Pollable):
     def __init__(self, server):
         super().__init__(server)
+        self.addr = f'{self.config.ws_server_addr}:{self.config.ws_server_port}'
+        self.ws_clients = []
         self.sock = None
-        self.addr = None
 
     def open(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,12 +27,15 @@ class WebSocketServer(Pollable):
         self.sock.setblocking(0)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.listen(1)
-        self.addr = f'{self.config.ws_server_addr}:{self.config.ws_server_port}'
         super().open(self.sock.fileno())
         print(f'{self.addr}: WebSocket server listening')
 
     def close(self):
         super().close()
+        ws_clients = self.ws_clients
+        self.ws_clients = []
+        for ws_client in ws_clients:
+            ws_client.close()
         if self.sock:
             self.sock.close()
             self.sock = None
@@ -42,6 +47,7 @@ class WebSocketServer(Pollable):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         ws_client = WebSocketClient(self.server)
         ws_client.open(sock, addr)
+        self.ws_clients.append(ws_client)
         print(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
 
 class WebSocketClient(Pollable):
@@ -53,8 +59,9 @@ class WebSocketClient(Pollable):
         self.last_ping_tm = self.last_recv_tm   ## most recent time a PING was sent to self.sock
         self.closing = False                    ## True: protocol reported close but data to send still pending
         self.sock = None                        ## TCP/IP socket accepted by WebSocketServer
-        self.addr = None                        ## string, source address "IP:PORT"
-        self.mac = None                         ## bytes, MAC address
+        self.addr = None                        ## string, remote client address "IP:PORT"
+        self.tap_dev = None                     ## TapDevice, websocket client's exclusive TAP device
+        self.ws_server = server.ws_server
 
     def open(self, sock, addr):
         self.sock = sock
@@ -63,9 +70,11 @@ class WebSocketClient(Pollable):
 
     def close(self):
         super().close()
-        if self.mac is not None:
-            self.server.dhcp_network.release_address(self.mac)
-            self.server.unregister_ws_client(self)
+        if self in self.ws_server.ws_clients:
+            self.ws_server.ws_clients.remove(self)
+        if self.tap_dev is not None:
+            self.tap_dev.close()
+            self.tap_dev = None
         if self.sock is not None:
             self.sock.close()
             self.sock = None
@@ -117,16 +126,14 @@ class WebSocketClient(Pollable):
         for ev in self.proto.events_received():
             if isinstance(ev, Frame):
                 if ev.opcode == Opcode.BINARY:
-                    if self.mac is None:
-                        src_mac = ev.data[ 6 : 12 ]
-                        self.server.register_ws_client(self, src_mac)
-                        print(f'{self.addr}: registered MAC address {mac2str(src_mac)}')
-                    self.server.tap_dev.send(ev.data)
+                    self.tap_dev.send(ev.data)
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)
                 elif ev.opcode != Opcode.PONG and ev.opcode != Opcode.CLOSE:
                     print(f'{self.addr}: received unhandled WebSocket packet: {ev.opcode} {ev}')
-            elif isinstance(ev, Request):
+            elif isinstance(ev, Request) and self.tap_dev is None:
+                self.tap_dev = TapDevice(self.server, self)
+                self.tap_dev.open()
                 self.proto.send_response(self.proto.accept(ev))
                 print(f'{self.addr}: accepted WebSocket client connection')
             else:

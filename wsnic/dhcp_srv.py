@@ -207,7 +207,7 @@ class DhcpPacket:
             opt_cursor += opt_len
         return pkt
 
-class DhcpListener(Pollable):
+class DhcpServer(Pollable):
     IGNORED_OPTIONS = [
         OptionEnum.HOSTNAME, OptionEnum.NTP_IPS, OptionEnum.TIME_OFFSET,
         OptionEnum.DOMAIN_SEARCH, OptionEnum.NETBIOS_NS_IPS,
@@ -232,7 +232,7 @@ class DhcpListener(Pollable):
         if self.sock is not None:
             self.sock.close()
             self.sock = None
-            print(f'DHCP: listener closed')
+            print(f'DHCP: server closed')
 
     def recv_ready(self):
         data, addr = self.sock.recvfrom(65535)
@@ -324,15 +324,15 @@ class DhcpNetwork:
         self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
 
         ## reserve first host ip address as our DHCP server IP (also server-ID, router IP and default gateway IP)
-        network = ipaddress.ip_network(config.dhcp_network)
+        network = ipaddress.ip_network(config.bridge_subnet)
         hosts = network.hosts()
         self.server_ip = str(next(hosts))
         self.hosts = [self.Host(str(addr)) for addr in hosts]
         self.gateway_ip = config.dhcp_gateway if config.dhcp_gateway else self.server_ip
         self.broadcast_ip = str(network.broadcast_address)
         self.netmask = str(network.netmask)
-        self.domain_name = config.dhcp_domain
-        self.domain_name_server = config.dhcp_nameserver
+        self.domain_name = config.dhcp_domain_name
+        self.domain_name_server = config.dhcp_domain_name_server
         self.lease_time = config.dhcp_lease_time if config.dhcp_lease_time else 60*60*24
         self.renewal_time = self.lease_time // 2
         self.rebinding_time = self.lease_time * 7 // 8
@@ -363,11 +363,11 @@ class DhcpNetwork:
     def assign_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
-            if not host.is_assigned:
+            if host.is_assigned:
+                print(f'DHCP: re-assigned IP address {host.ip} to MAC {mac2str(mac)}')
+            else:
                 host.is_assigned = True
                 print(f'DHCP: assigned IP address {host.ip} to MAC {mac2str(mac)}')
-            else:
-                print(f'DHCP: re-assigned IP address {host.ip} to MAC {mac2str(mac)}')
 
     def release_address(self, mac):
         if mac in self.mac2host:
