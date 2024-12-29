@@ -8,7 +8,7 @@
 ## - https://github.com/russdill/lwip-udhcpd/blob/master/udhcp_common.c
 ## - https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol
 
-import struct, socket, functools, enum, ipaddress, time
+import struct, socket, functools, enum, time
 from collections import namedtuple
 
 from wsnic import Pollable, mac2str
@@ -276,22 +276,23 @@ class DhcpServer(Pollable):
         pkt_out.op = DHCP_OP_REPLY
         pkt_out.flags |= DHCP_FLAG_BROADCAST
         pkt_out.yiaddr = client_ip
-        pkt_out.siaddr = self.dhcp_network.server_ip
-        pkt_out.giaddr = self.dhcp_network.gateway_ip
+        pkt_out.siaddr = self.config.bridge_addr
+        pkt_out.giaddr = self.config.dhcp_gateway
 
         pkt_out.options[OptionEnum.MSG_TYPE] = reply_msg_type
-        pkt_out.options[OptionEnum.SUBNET_MASK] = self.dhcp_network.netmask
-        pkt_out.options[OptionEnum.ROUTER_IPS] = self.dhcp_network.server_ip
-        pkt_out.options[OptionEnum.SERVER_ID] = self.dhcp_network.server_ip
-        pkt_out.options[OptionEnum.BROADCAST_IP] = self.dhcp_network.broadcast_ip
-        pkt_out.options[OptionEnum.LEASE_TIME] = self.dhcp_network.lease_time
-        pkt_out.options[OptionEnum.RENEWAL_TIME] = self.dhcp_network.renewal_time
-        pkt_out.options[OptionEnum.REBINDING_TIME] = self.dhcp_network.rebinding_time
+        pkt_out.options[OptionEnum.SUBNET_MASK] = self.config.netmask
+        pkt_out.options[OptionEnum.ROUTER_IPS] = self.config.bridge_addr
+        pkt_out.options[OptionEnum.SERVER_ID] = self.config.bridge_addr
+        pkt_out.options[OptionEnum.BROADCAST_IP] = self.config.broadcast_addr
+        pkt_out.options[OptionEnum.LEASE_TIME] = self.config.dhcp_lease_time
+        pkt_out.options[OptionEnum.RENEWAL_TIME] = self.config.dhcp_lease_time // 2
+        pkt_out.options[OptionEnum.REBINDING_TIME] = self.config.dhcp_lease_time * 7 // 8
         pkt_out.options[OptionEnum.MTU] = 1500
-        if self.dhcp_network.domain_name:
-            pkt_out.options[OptionEnum.DOMAIN_NAME] = self.dhcp_network.domain_name
-        if self.dhcp_network.domain_name_server:
-            pkt_out.options[OptionEnum.DNS_IPS] = self.dhcp_network.domain_name_server
+
+        if self.config.dhcp_domain_name:
+            pkt_out.options[OptionEnum.DOMAIN_NAME] = self.config.dhcp_domain_name
+        if self.config.dhcp_domain_name_server:
+            pkt_out.options[OptionEnum.DNS_IPS] = self.config.dhcp_domain_name_server
         if OptionEnum.HOSTNAME in pkt_in.options:
             pkt_out.options[OptionEnum.HOSTNAME] = pkt_in.options[OptionEnum.HOSTNAME]
 
@@ -320,22 +321,8 @@ class DhcpNetwork:
             self.is_assigned = False
 
     def __init__(self, config):
-        self.hosts = []     ## array(Host host, ...)
         self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
-
-        ## reserve first host ip address as our DHCP server IP (also server-ID, router IP and default gateway IP)
-        network = ipaddress.ip_network(config.bridge_subnet)
-        hosts = network.hosts()
-        self.server_ip = str(next(hosts))
-        self.hosts = [self.Host(str(addr)) for addr in hosts]
-        self.gateway_ip = config.dhcp_gateway if config.dhcp_gateway else self.server_ip
-        self.broadcast_ip = str(network.broadcast_address)
-        self.netmask = str(network.netmask)
-        self.domain_name = config.dhcp_domain_name
-        self.domain_name_server = config.dhcp_domain_name_server
-        self.lease_time = config.dhcp_lease_time if config.dhcp_lease_time else 60*60*24
-        self.renewal_time = self.lease_time // 2
-        self.rebinding_time = self.lease_time * 7 // 8
+        self.hosts = [self.Host(addr) for addr in config.host_addrs]
 
     def reserve_address(self, mac):
         selected_host = None

@@ -23,15 +23,13 @@ IFF_TAP = 0x0002
 IFF_NO_PI = 0x1000
 
 class TapBridge:
-    def __init__(self, server, br_iface):
+    def __init__(self, server, br_iface='wsnicbr0'):
         self.server = server
-        self.is_opened = False
-        self.eth_iface = server.config.eth_iface        ## string, 'eth0'
-        self.br_iface = br_iface                        ## string, 'wsnicbr0'
-        self.br_ip = server.dhcp_network.server_ip      ## string, '192.168.2.1'
-        self.br_netmask = server.dhcp_network.netmask   ## string, '255.255.255.0'
-        self.br_restrict_inbound = server.config.bridge_restrict_inbound
+        self.config = server.config
+        self.br_iface = br_iface
+        self.eth_iface = self.config.eth_iface
         self.dhcp_server = None
+        self.is_opened = False
 
     def open(self):
         if self.is_opened:
@@ -40,7 +38,7 @@ class TapBridge:
 
         ## create bridge
         run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge'], check=True)
-        run(['ip', 'addr', 'add', f'{self.br_ip}/{self.br_netmask}', 'dev', self.br_iface], check=True)
+        run(['ip', 'addr', 'add', f'{self.config.bridge_addr}/{self.config.netmask}', 'dev', self.br_iface], check=True)
         run(['ip', 'link', 'set', self.br_iface, 'up'], check=True)
 
         ## setup bridge NAT rules
@@ -76,7 +74,7 @@ class TapBridge:
         cmd = '-A' if do_install else '-D'
         run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'], check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'], check=do_install)
-        if self.br_restrict_inbound:
+        if self.config.bridge_restrict_inbound:
             run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.br_iface,
                 '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], check=do_install)
         else:

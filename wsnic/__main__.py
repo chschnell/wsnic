@@ -3,7 +3,7 @@
 ## Main entry point.
 ##
 
-import os, re, configparser, argparse, time, select
+import os, re, configparser, argparse, time, ipaddress, select
 
 from wsnic.websock_srv import WebSocketServer
 from wsnic.tap_dev import TapBridge
@@ -20,6 +20,11 @@ class Config:
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
         self.dhcp_lease_time = 86400
+
+        self.bridge_addr = None
+        self.host_addrs = None
+        self.broadcast_addr = None
+        self.netmask = None
 
     def parse_conf(self, conf_filename):
         with open(conf_filename) as f_in:
@@ -39,6 +44,18 @@ class Config:
                 setattr(self, opt_name, opt_value)
             else:
                 print(f'{conf_filename}: warning: unknown option "{opt_name}" ignored')
+
+    def finalize(self):
+        subnet = ipaddress.ip_network(self.bridge_subnet)
+        hosts = subnet.hosts()
+        self.bridge_addr = str(next(hosts))
+        self.host_addrs = [str(addr) for addr in hosts]
+        self.broadcast_addr = str(subnet.broadcast_address)
+        self.netmask = str(subnet.netmask)
+        if not self.dhcp_gateway:
+            self.dhcp_gateway = self.bridge_addr
+        if not self.dhcp_lease_time:
+            self.dhcp_lease_time = 86400
 
 class WsnicServer:
     def __init__(self, config):
@@ -65,7 +82,7 @@ class WsnicServer:
                 del self.pollables[fd]
 
     def run(self):
-        self.tap_bridge = TapBridge(self, 'wsnicbr0')
+        self.tap_bridge = TapBridge(self)
         self.tap_bridge.open()
 
         self.ws_server = WebSocketServer(self)
@@ -117,6 +134,7 @@ def main():
     config = Config()
     if os.path.isfile(args.conf):
         config.parse_conf(args.conf)
+    config.finalize()
 
     server = WsnicServer(config)
     try:
