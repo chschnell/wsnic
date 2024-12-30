@@ -5,6 +5,8 @@
 
 import logging, socket, time
 
+import struct
+
 from websockets.server import ServerProtocol
 from websockets.http11 import Request
 from websockets.frames import Frame, Opcode
@@ -127,11 +129,22 @@ class WebSocketClient(Pollable):
         for ev in self.proto.events_received():
             if isinstance(ev, Frame):
                 if ev.opcode == Opcode.BINARY:
+                    dst_mac, src_mac = struct.unpack_from('6s6s', ev.data)
                     if self.mac is None:
-                        self.mac = ev.data[ 6 : 12 ]    ## [0:6] = destination MAC, [6:12] = source MAC
+                        self.mac = src_mac
                         self.server.register_ws_client(self.mac, self)
                         logger.info(f'{self.addr}: registered MAC address {mac2str(self.mac)}')
-                    self.server.tap_dev.send(ev.data)
+                    if dst_mac[0] & 0x1:
+                        for ws_client in self.server.mac2ws.values():
+                            if ws_client != self:
+                                ws_client.send(ev.data)
+                        self.server.tap_dev.send(ev.data)
+                    else:
+                        ws_client = self.server.mac2ws.get(dst_mac, None)
+                        if ws_client:
+                            ws_client.send(ev.data)
+                        else:
+                            self.server.tap_dev.send(ev.data)
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)
                 elif ev.opcode != Opcode.PONG and ev.opcode != Opcode.CLOSE:
