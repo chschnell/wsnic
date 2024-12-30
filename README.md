@@ -1,10 +1,9 @@
 **wsnic** is a WebSocket to TAP device proxy server for linux.
 
-* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between an open number of WebSocket clients and local [TAP devices](https://en.wikipedia.org/wiki/TUN/TAP)
-* uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
-* maintains a separate TAP device for each WebSocket connection
-* provides a built-in DHCP service answering to WebSocket clients
-* uses a single [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and TAP devices
+* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a local [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) and an open number of WebSocket clients
+* uses [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
+* provides built-in DHCP service on the TAP device answering to WebSocket clients
+* uses a single [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and the TAP device
 * sends periodic PINGs to idle WebSocket clients
 
 ## Installation
@@ -31,42 +30,13 @@ Command line options:
 
 ```
 $ ./wsnic.sh -h
-usage: wsnic [-h] [-c CONF_FILE] [-v]
+usage: wsnic [-h] [-c CONF_FILE]
 
 WebSocket to TAP device proxy server.
 
 options:
   -h, --help    show this help message and exit
   -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
-  -v            print verbose output
-```
-
-## Network architecture
-
-```
-+----------------+   +----------------+   +----------------+
-| WebSock Client |   | WebSock Client |   | WebSock Client |
-|   via wsnic0   |   |   via wsnic1   |   |   via wsnicN   |
-+--------+-------+   +--------+-------+   +--------+-------+
-         |                    |                    |
-+--------+-------+   +--------+-------+   +--------+-------+
-|  wsnic0 (TAP)  |   |  wsnic1 (TAP)  |   |  wsnicN (TAP)  |
-|  192.168.10.2  |   |  192.168.10.3  |   |  192.168.10.N  |
-+--------+-------+   +--------+-------+   +--------+-------+
-         |                    |                    |
-         +--------------------+--------------------+
-                              |                     
-                  +-----------+----------+    + - - - -+
-                  |     wsnicbr0 (BR)    |....:  DHCP  :
-                  |   IP: 192.168.10.1   |    : Server :
-                  +-----------+----------+    +- - - - +
-                              |
-                  NAT (iptables MASQUERADE)
-                              |
-                  +-----------+----------+
-                  |      eth0 (NIC)      |
-                  |   External Network   |
-                  +----------------------+
 ```
 
 ## Optional: wss-to-ws conversion with Apache2 (Debian 12)

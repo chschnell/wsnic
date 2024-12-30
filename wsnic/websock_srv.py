@@ -9,8 +9,7 @@ from websockets.server import ServerProtocol
 from websockets.http11 import Request
 from websockets.frames import Frame, Opcode
 
-from wsnic import Pollable, FrameQueue
-from wsnic.tap_dev import TapDevice
+from wsnic import Pollable, FrameQueue, mac2str
 
 logger = logging.getLogger('websock')
 
@@ -46,14 +45,19 @@ class WebSocketServer(Pollable):
         sock, addr = self.sock.accept()
         sock.setblocking(0)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        ws_client = WebSocketClient(self.server)
+        ws_client = WebSocketClient(self)
         ws_client.open(sock, addr)
         self.ws_clients.append(ws_client)
         logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
 
+    def remove_ws_client(self, ws_client):
+        if ws_client in self.ws_clients:
+            self.ws_clients.remove(ws_client)
+
 class WebSocketClient(Pollable):
-    def __init__(self, server):
-        super().__init__(server)
+    def __init__(self, ws_server):
+        super().__init__(ws_server.server)
+        self.ws_server = ws_server              ## WebSocketServer, the server that created this instance
         self.proto = ServerProtocol()           ## sans-io WebSocket protocol handler
         self.out = FrameQueue()                 ## frames waiting to be send to self.sock
         self.last_recv_tm = time.time()         ## most recent time any data was received from self.sock
@@ -61,8 +65,7 @@ class WebSocketClient(Pollable):
         self.closing = False                    ## True: protocol reported close but data to send still pending
         self.sock = None                        ## TCP/IP socket accepted by WebSocketServer
         self.addr = None                        ## string, remote client address "IP:PORT"
-        self.tap_dev = None                     ## TapDevice, websocket client's exclusive TAP device
-        self.ws_server = server.ws_server
+        self.mac = None                         ## bytes, grabbed MAC address
 
     def open(self, sock, addr):
         self.sock = sock
@@ -71,11 +74,8 @@ class WebSocketClient(Pollable):
 
     def close(self):
         super().close()
-        if self in self.ws_server.ws_clients:
-            self.ws_server.ws_clients.remove(self)
-        if self.tap_dev is not None:
-            self.tap_dev.close()
-            self.tap_dev = None
+        self.server.unregister_ws_client(self)
+        self.ws_server.remove_ws_client(self)
         if self.sock is not None:
             self.sock.close()
             self.sock = None
@@ -127,14 +127,16 @@ class WebSocketClient(Pollable):
         for ev in self.proto.events_received():
             if isinstance(ev, Frame):
                 if ev.opcode == Opcode.BINARY:
-                    self.tap_dev.send(ev.data)
+                    if self.mac is None:
+                        src_mac = ev.data[ 6 : 12 ]
+                        self.server.register_ws_client(self, src_mac)
+                        logger.info(f'{self.addr}: registered MAC address {mac2str(src_mac)}')
+                    self.server.tap_dev.send(ev.data)
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)
                 elif ev.opcode != Opcode.PONG and ev.opcode != Opcode.CLOSE:
                     logger.warning(f'{self.addr}: received unhandled WebSocket packet: {ev.opcode} {ev}')
-            elif isinstance(ev, Request) and self.tap_dev is None:
-                self.tap_dev = TapDevice(self.server, self)
-                self.tap_dev.open()
+            elif isinstance(ev, Request):
                 self.proto.send_response(self.proto.accept(ev))
                 logger.info(f'{self.addr}: accepted WebSocket client connection')
             else:

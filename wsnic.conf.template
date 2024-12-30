@@ -19,42 +19,35 @@ ws_server_port=8070
 eth_iface=eth0
 
 #
-# Bridge subnet
+# Subnet
 # - subnet's first and last IP addresses are reserved for network and broadcast addresses
-# - subnet's second IP address is reserved for the bridge IP (also DHCP server and default gateway IP)
+# - subnet's second IP is reserved for the TAP device (also DHCP server and gateway IP)
 # - remaining IP addresses are used for the DHCP address pool
-# - example for default subnet 192.168.2.0/24:
+# - example for the default subnet 192.168.2.0/24:
 #   - network address: 192.168.2.0
 #   - broadcast address: 192.168.2.255
-#   - bridge address: 192.168.2.1
+#   - TAP device/DHCP server/gateway address: 192.168.2.1
 #   - DHCP address pool: 192.168.2.2, 192.168.2.3, ..., 192.168.2.254
 #
-bridge_subnet=192.168.2.0/24
-
-#
-# Filter packets from eth_iface to bridged TAP devices
-# - if true: forward only ESTABLISHED and RELATED packets from eth_iface to TAP devices
-# - else: forward all packets from eth_iface to TAP devices
-#
-bridge_restrict_inbound=true
-
-#
-# DHCP gateway IP address (optional, defaults to bridge IP)
-#
-dhcp_gateway=
-
-#
-# DHCP Domain Name (optional)
-#
-dhcp_domain_name=
-
-#
-# DHCP Domain Name Server IP addresses
-# - optional, 0 or any number of Domain Name Server IP addresses
-#
-dhcp_domain_name_server=8.8.8.8, 8.8.4.4
+subnet=192.168.2.0/24
 
 #
 # DHCP lease time in seconds
 #
 dhcp_lease_time=86400
+
+#
+# Domain Name announced in DHCP replies (optional)
+#
+dhcp_domain_name=
+
+#
+# Domain Name Server IP addresses announced in DHCP replies
+# - optional, 0 or any number of Domain Name Server IP addresses
+#
+dhcp_domain_name_server=8.8.8.8, 8.8.4.4
+
+#
+# Maximum Transmission Unit (MTU) announced in DHCP replies
+#
+dhcp_mtu=1500

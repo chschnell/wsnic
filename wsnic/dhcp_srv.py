@@ -37,7 +37,6 @@ DHCP_MAGIC_COOKIE = b'\x63\x82\x53\x63'
 
 ## UDP port numbers
 DHCP_SERVER_PORT = 67
-DHCP_CLIENT_PORT = 68
 
 BROADCAST_ADDR = '255.255.255.255'
 
@@ -223,6 +222,7 @@ class DhcpServer(Pollable):
 
     def __init__(self, server):
         super().__init__(server)
+        self.dhcp_network = server.dhcp_network
         self.sock = None
 
     def open(self, iface):
@@ -251,50 +251,51 @@ class DhcpServer(Pollable):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(pkt_in.dump(f'{addr[0]}:{addr[1]}: RECV[{len(data)}]'))
 
-        reply_msg_type = None
         client_mac = pkt_in.chaddr[ : pkt_in.hlen ]
         client_ip = None
+        reply_msg_type = None
 
         request_msg_type = pkt_in.options[OptionEnum.MSG_TYPE]
         if request_msg_type == DHCP_MSG_TYPE_DISCOVER:
-            client_ip = self.server.dhcp_network.reserve_address(client_mac)
+            client_ip = self.dhcp_network.reserve_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_OFFER
         elif request_msg_type == DHCP_MSG_TYPE_REQUEST:
-            client_ip = self.server.dhcp_network.find_address(client_mac)
+            client_ip = self.dhcp_network.find_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_ACK
-                self.server.dhcp_network.assign_address(client_mac)
+                self.dhcp_network.assign_address(client_mac)
+            else:
+                reply_msg_type = DHCP_MSG_TYPE_NAK
+                client_ip = '0.0.0.0'
         elif request_msg_type == DHCP_MSG_TYPE_DECLINE:
-            pass
+            self.dhcp_network.clear_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_RELEASE:
-            self.server.dhcp_network.release_address(client_mac)
+            self.dhcp_network.release_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_INFORM:
             pass
         else:
             logger.warning(f'packet with unexpected Message Type Option {request_msg_type} dropped')
-            return
 
-        if reply_msg_type is None:
+        if reply_msg_type is None or client_ip is None:
             return
 
         pkt_out = pkt_in.copy()
         pkt_out.op = DHCP_OP_REPLY
         pkt_out.flags |= DHCP_FLAG_BROADCAST
         pkt_out.yiaddr = client_ip
-        pkt_out.siaddr = self.config.bridge_addr
-        pkt_out.giaddr = self.config.dhcp_gateway
+        pkt_out.siaddr = self.config.server_addr
+        pkt_out.giaddr = self.config.server_addr
 
         pkt_out.options[OptionEnum.MSG_TYPE] = reply_msg_type
         pkt_out.options[OptionEnum.SUBNET_MASK] = self.config.netmask
-        pkt_out.options[OptionEnum.ROUTER_IPS] = self.config.bridge_addr
-        pkt_out.options[OptionEnum.SERVER_ID] = self.config.bridge_addr
+        pkt_out.options[OptionEnum.ROUTER_IPS] = self.config.server_addr
+        pkt_out.options[OptionEnum.SERVER_ID] = self.config.server_addr
         pkt_out.options[OptionEnum.BROADCAST_IP] = self.config.broadcast_addr
         pkt_out.options[OptionEnum.LEASE_TIME] = self.config.dhcp_lease_time
         pkt_out.options[OptionEnum.RENEWAL_TIME] = self.config.dhcp_lease_time // 2
         pkt_out.options[OptionEnum.REBINDING_TIME] = self.config.dhcp_lease_time * 7 // 8
-        pkt_out.options[OptionEnum.MTU] = 1500
-
+        pkt_out.options[OptionEnum.MTU] = self.config.dhcp_mtu
         if self.config.dhcp_domain_name:
             pkt_out.options[OptionEnum.DOMAIN_NAME] = self.config.dhcp_domain_name
         if self.config.dhcp_domain_name_server:
@@ -307,29 +308,37 @@ class DhcpServer(Pollable):
                 try:
                     opt_enum = OptionEnum(opt_code)
                 except ValueError:
-                    logger.warning(f'DHCP: skipped requested Option with unknown code {opt_code}')
+                    logger.warning(f'skipped requested Option with unknown code {opt_code}')
                 else:
                     if opt_enum not in pkt_out.options and opt_enum not in self.IGNORED_OPTIONS:
-                        logger.debug(f'DHCP: skipped requested Option {opt_enum}')
+                        logger.debug(f'skipped requested Option {opt_enum}')
 
         bytes_out = pkt_out.to_bytes()
 
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(pkt_out.dump(f'{BROADCAST_ADDR}:{DHCP_CLIENT_PORT}: SEND[{len(bytes_out)}]'))
+            logger.debug(pkt_out.dump(f'{BROADCAST_ADDR}:{addr[1]}: SEND[{len(bytes_out)}]'))
 
-        self.sock.sendto(bytes_out, (BROADCAST_ADDR, DHCP_CLIENT_PORT))
+        self.sock.sendto(bytes_out, (BROADCAST_ADDR, addr[1]))
 
 class DhcpNetwork:
     class Host:
         def __init__(self, ip):
             self.ip = ip
             self.mac = None
-            self.reserved_tm = 0
+            self.last_used_tm = 0
             self.is_assigned = False
 
     def __init__(self, config):
-        self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
         self.hosts = [self.Host(addr) for addr in config.host_addrs]
+        self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
+
+    def clear_address(self, mac):
+        if mac in self.mac2host:
+            host = self.mac2host[mac]
+            host.mac = None
+            host.last_used_tm = time.time()
+            host.is_assigned = False
+            del self.mac2host[mac]
 
     def reserve_address(self, mac):
         selected_host = None
@@ -339,7 +348,7 @@ class DhcpNetwork:
             for host in self.hosts:
                 if host.is_assigned:
                     continue
-                elif selected_host is None or host.reserved_tm < selected_host.reserved_tm:
+                elif selected_host is None or host.last_used_tm < selected_host.last_used_tm:
                     selected_host = host
         if selected_host is None:
             return None
@@ -348,7 +357,7 @@ class DhcpNetwork:
                 del self.mac2host[selected_host.mac]
             self.mac2host[mac] = selected_host
             selected_host.mac = mac
-        selected_host.reserved_tm = time.time()
+        selected_host.last_used_tm = time.time()
         return selected_host.ip
 
     def find_address(self, mac):
@@ -362,6 +371,7 @@ class DhcpNetwork:
             else:
                 host.is_assigned = True
                 logger.info(f'assigned IP address {host.ip} to MAC {mac2str(mac)}')
+            host.last_used_tm = time.time()
 
     def release_address(self, mac):
         if mac in self.mac2host:
