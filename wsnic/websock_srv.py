@@ -74,7 +74,7 @@ class WebSocketClient(Pollable):
 
     def close(self):
         super().close()
-        self.server.unregister_ws_client(self)
+        self.server.unregister_ws_client(self.mac)
         self.ws_server.remove_ws_client(self)
         if self.sock is not None:
             self.sock.close()
@@ -128,9 +128,9 @@ class WebSocketClient(Pollable):
             if isinstance(ev, Frame):
                 if ev.opcode == Opcode.BINARY:
                     if self.mac is None:
-                        src_mac = ev.data[ 6 : 12 ]
-                        self.server.register_ws_client(self, src_mac)
-                        logger.info(f'{self.addr}: registered MAC address {mac2str(src_mac)}')
+                        self.mac = ev.data[ 6 : 12 ]    ## [0:6] = destination MAC, [6:12] = source MAC
+                        self.server.register_ws_client(self.mac, self)
+                        logger.info(f'{self.addr}: registered MAC address {mac2str(self.mac)}')
                     self.server.tap_dev.send(ev.data)
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)

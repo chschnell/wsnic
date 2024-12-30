@@ -71,16 +71,13 @@ class WsnicServer:
             if fd in self.pollables:
                 del self.pollables[fd]
 
-    def register_ws_client(self, ws_client, mac):
-        self.unregister_ws_client(ws_client)
+    def register_ws_client(self, mac, ws_client):
         self.mac2ws[mac] = ws_client
-        ws_client.mac = mac
 
-    def unregister_ws_client(self, ws_client):
-        if ws_client.mac is not None:
-            self.dhcp_network.release_address(ws_client.mac)
-            del self.mac2ws[ws_client.mac]
-            ws_client.mac = None
+    def unregister_ws_client(self, mac):
+        if mac is not None:
+            self.dhcp_network.release_address(mac)
+            del self.mac2ws[mac]
 
     def relay_to_ws_client(self, eth_frame):
         dst_mac = eth_frame[ : 6 ]
