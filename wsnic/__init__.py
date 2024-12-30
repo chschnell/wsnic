@@ -48,6 +48,9 @@ class Pollable:
     def recv_ready(self):
         pass
 
+    def send(self, eth_frame):
+        pass
+
     def refresh(self, tm_now):
         pass
 
