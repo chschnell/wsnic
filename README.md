@@ -1,7 +1,7 @@
 **wsnic** is a WebSocket to TAP device proxy server for linux.
 
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a local [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) and an open number of WebSocket clients
-* uses [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
+* uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * provides built-in DHCP service on the TAP device answering to WebSocket clients
 * uses a single [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and the TAP device
 * sends periodic PINGs to idle WebSocket clients
@@ -30,13 +30,14 @@ Command line options:
 
 ```
 $ ./wsnic.sh -h
-usage: wsnic [-h] [-c CONF_FILE]
+usage: wsnic [-h] [-c CONF_FILE] [-v]
 
 WebSocket to TAP device proxy server.
 
 options:
   -h, --help    show this help message and exit
   -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
+  -v            print verbose output
 ```
 
 ## Optional: wss-to-ws conversion with Apache2 (Debian 12)
