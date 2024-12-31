@@ -3,8 +3,15 @@
 ## Shared package classes.
 ##
 
+import logging, subprocess
+
 from select import EPOLLIN, EPOLLOUT
 from collections import deque
+
+def run(cmd_line, logger, check=False):
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f'run: {" ".join(cmd_line)}')
+    subprocess.run(cmd_line, check=check)
 
 def mac2str(mac):
     mac = mac.hex()
@@ -14,6 +21,7 @@ class Pollable:
     def __init__(self, server, epoll_flags=EPOLLIN):
         self.server = server
         self.config = server.config
+        self.netbe = server.netbe
         self.epoll = server.epoll
         self.epoll_flags = epoll_flags
         self.fd = None
@@ -81,3 +89,35 @@ class FrameQueue:
             self.curr_consumed += n_bytes
             if self.curr_consumed >= len(self.curr_frame):
                 self.curr_frame = None
+
+class NetworkBackend:
+    def __init__(self, server):
+        self.server = server        ## WsnicServer
+        self.config = server.config ## WsnicConfig
+        self.ws_clients = set()     ## set(WebSocketClient ws_client)
+        self.mac_to_client = {}     ## dict(bytes mac[6] => WebSocketClient ws_client)
+
+    def attach_client(self, ws_client):
+        self.ws_clients.add(ws_client)
+
+    def detach_client(self, ws_client):
+        if ws_client.mac_addr and ws_client.mac_addr in self.mac_to_client:
+            del self.mac_to_client[ws_client.mac_addr]
+        self.ws_clients.discard(ws_client)
+
+    def set_client_mac(self, ws_client, mac):
+        if ws_client.mac_addr != mac:
+            if ws_client.mac_addr and ws_client.mac_addr in self.mac_to_client:
+                del self.mac_to_client[ws_client.mac_addr]
+            self.mac_to_client[mac] = ws_client
+            ws_client.mac_addr = mac
+
+    def open(self):
+        pass
+
+    def close(self):
+        pass
+
+    def forward_from_ws_client(self, ws_client, eth_frame):
+        ## Called by WebSocketClient.recv() when a new eth_frame has arrived.
+        pass

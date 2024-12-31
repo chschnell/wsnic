@@ -5,13 +5,15 @@
 
 import os, re, logging, configparser, argparse, time, ipaddress, select
 
-from wsnic.websock_srv import WebSocketServer
-from wsnic.tap_dev import TapDevice
-from wsnic.dhcp_srv import DhcpNetwork
+from wsnic.websock import WebSocketServer
+from wsnic.dhcp import DhcpNetwork
+from wsnic.nbe_tapdev import TapDeviceNetworkBackend
+from wsnic.nbe_pktsock import PacketSocketNetworkBackend
+from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
 logger = logging.getLogger('main')
 
-class Config:
+class WsnicConfig:
     def __init__(self, conf_filename):
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
@@ -47,14 +49,14 @@ class Config:
         self.netmask = str(subnet.netmask)
 
 class WsnicServer:
-    def __init__(self, config):
-        self.config = config
-        self.dhcp_network = DhcpNetwork(config)
-        self.epoll = select.epoll()
-        self.pollables = {}     ## dict(int fd => Pollable pollable)
-        self.mac2ws = {}        ## dict(bytes mac[6] => WsConnection ws_conn)
-        self.tap_dev = None
-        self.ws_server = None
+    def __init__(self, config, netbe_class):
+        self.config = config                    ## WsnicConfig
+        self.netbe_class = netbe_class          ## NetworkBackend class
+        self.netbe = None                       ## NetworkBackend, instance of netbe_class created in run()
+        self.ws_server = None                   ## WebSocketServer, created in run()
+        self.dhcp_network = DhcpNetwork(config) ## backend for DHCP request handler
+        self.epoll = select.epoll()             ## single epoll object for all open sockets and files
+        self.pollables = {}                     ## dict(int fd => Pollable pollable)
 
     def register_pollable(self, fd, pollable, epoll_flags):
         if fd in self.pollables:
@@ -71,31 +73,13 @@ class WsnicServer:
             if fd in self.pollables:
                 del self.pollables[fd]
 
-    def register_ws_client(self, mac, ws_client):
-        self.mac2ws[mac] = ws_client
-
-    def unregister_ws_client(self, mac):
-        if mac is not None:
-            self.dhcp_network.release_address(mac)
-            del self.mac2ws[mac]
-
-    def relay_to_ws_client(self, eth_frame):
-        dst_mac = eth_frame[ : 6 ]
-        ws_client = self.mac2ws.get(dst_mac, None)
-        if ws_client:
-            ws_client.send(eth_frame)
-        elif dst_mac[0] & 0x1:
-            ## LSB in first octet: 0=UNICAST, 1=MULTICAST (and also BROADCAST with all octets being 0xff)
-            for ws_client in self.mac2ws.values():
-                ws_client.send(eth_frame)
-
     def run(self):
         if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
             with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
                 f_out.write('1\n')
 
-        self.tap_dev = TapDevice(self)
-        self.tap_dev.open()
+        self.netbe = self.netbe_class(self)
+        self.netbe.open()
 
         self.ws_server = WebSocketServer(self)
         self.ws_server.open()
@@ -112,9 +96,8 @@ class WsnicServer:
                 if ev & select.EPOLLOUT:
                     pollable.send_ready()
                 if ev & select.EPOLLHUP:
-                    if pollable == self.tap_dev or pollable == self.ws_server:
-                        pollable_name = 'TAP device file' if pollable == self.tap_dev else 'WebSocket server socket'
-                        logger.error(f'*** received unexpected hangup from {pollable_name}, terminating')
+                    if pollable == self.ws_server:
+                        logger.error('received unexpected hangup from WebSocket server socket, terminating')
                         terminated = True
                         break
                     else:
@@ -128,13 +111,15 @@ class WsnicServer:
         if self.ws_server:
             self.ws_server.close()
             self.ws_server = None
-        if self.tap_dev:
-            self.tap_dev.close()
-            self.tap_dev = None
+        if self.netbe:
+            self.netbe.close()
+            self.netbe = None
         self.epoll.close()
 
 def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to TAP device proxy server.')
+    parser.add_argument('-n', help='use network backend NETBE (tapdev, brtap or pktsock; default: tapdev)',
+        choices=['tapdev', 'brtap', 'pktsock'], default='tapdev', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
@@ -144,11 +129,19 @@ def main():
         print(f'error: must be run by root')
         return
 
+    netbe_class = None
+    if args.netbe == 'tapdev':
+        netbe_class = TapDeviceNetworkBackend
+    elif args.netbe == 'brtap':
+        netbe_class = BridgedTapNetworkBackend
+    elif args.netbe == 'pktsock':
+        netbe_class = PacketSocketNetworkBackend
+
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
-    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets
+    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
 
-    server = WsnicServer(Config(args.conf))
+    server = WsnicServer(WsnicConfig(args.conf), netbe_class)
     try:
         server.run()
     except KeyboardInterrupt:

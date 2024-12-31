@@ -1,5 +1,5 @@
 ##
-## dhcp_srv.py
+## dhcp.py
 ## IPv4 DHCP server.
 ##
 ## Links:
@@ -214,39 +214,28 @@ class DhcpPacket:
             opt_cursor += opt_len
         return pkt
 
-class DhcpServer(Pollable):
-    IGNORED_OPTIONS = [
+class DhcpNetwork:
+    class Host:
+        def __init__(self, ip):
+            self.ip = ip
+            self.mac = None
+            self.last_used_tm = 0
+            self.is_assigned = False
+
+    IGNORED_REQUEST_OPTIONS = [
         OptionEnum.HOSTNAME, OptionEnum.NTP_IPS, OptionEnum.TIME_OFFSET,
         OptionEnum.DOMAIN_SEARCH, OptionEnum.NETBIOS_NS_IPS,
         OptionEnum.NETBIOS_SCOPE, OptionEnum.CLASSLESS_ROUTE ]
 
-    def __init__(self, server):
-        super().__init__(server)
-        self.dhcp_network = server.dhcp_network
-        self.sock = None
+    def __init__(self, config):
+        self.config = config
+        self.hosts = [self.Host(addr) for addr in config.host_addrs]
+        self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
 
-    def open(self, iface):
-        logger.info(f'server listening on interface {iface}')
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, iface.encode())
-        self.sock.bind(('0.0.0.0', DHCP_SERVER_PORT))
-        self.sock.setblocking(0)
-        super().open(self.sock.fileno())
-
-    def close(self):
-        super().close()
-        if self.sock is not None:
-            self.sock.close()
-            self.sock = None
-            logger.info(f'server closed')
-
-    def recv_ready(self):
-        data, addr = self.sock.recvfrom(65535)
-
+    def handle_request(self, data, addr):
         pkt_in = DhcpPacket.from_bytes(data)
         if not pkt_in:
-            return
+            return None
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(pkt_in.dump(f'{addr[0]}:{addr[1]}: RECV[{len(data)}]'))
@@ -257,28 +246,28 @@ class DhcpServer(Pollable):
 
         request_msg_type = pkt_in.options[OptionEnum.MSG_TYPE]
         if request_msg_type == DHCP_MSG_TYPE_DISCOVER:
-            client_ip = self.dhcp_network.reserve_address(client_mac)
+            client_ip = self.reserve_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_OFFER
         elif request_msg_type == DHCP_MSG_TYPE_REQUEST:
-            client_ip = self.dhcp_network.find_address(client_mac)
+            client_ip = self.find_address(client_mac)
             if client_ip:
                 reply_msg_type = DHCP_MSG_TYPE_ACK
-                self.dhcp_network.assign_address(client_mac)
+                self.assign_address(client_mac)
             else:
                 reply_msg_type = DHCP_MSG_TYPE_NAK
                 client_ip = '0.0.0.0'
         elif request_msg_type == DHCP_MSG_TYPE_DECLINE:
-            self.dhcp_network.clear_address(client_mac)
+            self.clear_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_RELEASE:
-            self.dhcp_network.release_address(client_mac)
+            self.release_address(client_mac)
         elif request_msg_type == DHCP_MSG_TYPE_INFORM:
             pass
         else:
             logger.warning(f'packet with unexpected Message Type Option {request_msg_type} dropped')
 
         if reply_msg_type is None or client_ip is None:
-            return
+            return None
 
         pkt_out = pkt_in.copy()
         pkt_out.op = DHCP_OP_REPLY
@@ -310,27 +299,13 @@ class DhcpServer(Pollable):
                 except ValueError:
                     logger.warning(f'skipped requested Option with unknown code {opt_code}')
                 else:
-                    if opt_enum not in pkt_out.options and opt_enum not in self.IGNORED_OPTIONS:
+                    if opt_enum not in pkt_out.options and opt_enum not in self.IGNORED_REQUEST_OPTIONS:
                         logger.debug(f'skipped requested Option {opt_enum}')
 
         bytes_out = pkt_out.to_bytes()
-
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(pkt_out.dump(f'{BROADCAST_ADDR}:{addr[1]}: SEND[{len(bytes_out)}]'))
-
-        self.sock.sendto(bytes_out, (BROADCAST_ADDR, addr[1]))
-
-class DhcpNetwork:
-    class Host:
-        def __init__(self, ip):
-            self.ip = ip
-            self.mac = None
-            self.last_used_tm = 0
-            self.is_assigned = False
-
-    def __init__(self, config):
-        self.hosts = [self.Host(addr) for addr in config.host_addrs]
-        self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
+        return bytes_out
 
     def clear_address(self, mac):
         if mac in self.mac2host:
@@ -379,3 +354,31 @@ class DhcpNetwork:
             if host.is_assigned:
                 host.is_assigned = False
                 logger.info(f'released IP address {host.ip}')
+
+class DhcpServer(Pollable):
+    def __init__(self, server):
+        super().__init__(server)
+        self.dhcp_network = server.dhcp_network
+        self.sock = None
+
+    def open(self, iface):
+        logger.info(f'server listening on interface {iface}')
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, iface.encode())
+        self.sock.bind(('0.0.0.0', DHCP_SERVER_PORT))
+        self.sock.setblocking(0)
+        super().open(self.sock.fileno())
+
+    def close(self):
+        super().close()
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+            logger.info(f'server closed')
+
+    def recv_ready(self):
+        data, addr = self.sock.recvfrom(65535)
+        reply_bytes = self.dhcp_network.handle_request(data, addr)
+        if reply_bytes:
+            self.sock.sendto(reply_bytes, (BROADCAST_ADDR, addr[1]))

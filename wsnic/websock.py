@@ -1,5 +1,5 @@
 ##
-## websock_srv.py
+## websock.py
 ## WebSocket server classes based on websockets.
 ##
 
@@ -52,32 +52,35 @@ class WebSocketServer(Pollable):
         self.ws_clients.append(ws_client)
         logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
 
-    def remove_ws_client(self, ws_client):
+    def remove_client(self, ws_client):
         if ws_client in self.ws_clients:
             self.ws_clients.remove(ws_client)
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
         super().__init__(ws_server.server)
-        self.ws_server = ws_server              ## WebSocketServer, the server that created this instance
-        self.proto = ServerProtocol()           ## sans-io WebSocket protocol handler
-        self.out = FrameQueue()                 ## frames waiting to be send to self.sock
-        self.last_recv_tm = time.time()         ## most recent time any data was received from self.sock
-        self.last_ping_tm = self.last_recv_tm   ## most recent time a PING was sent to self.sock
-        self.closing = False                    ## True: protocol reported close but data to send still pending
-        self.sock = None                        ## TCP/IP socket accepted by WebSocketServer
-        self.addr = None                        ## string, remote client address "IP:PORT"
-        self.mac = None                         ## bytes, grabbed MAC address
+        self.ws_server = ws_server            ## WebSocketServer, the server that created this instance
+        self.proto = ServerProtocol()         ## sans-io WebSocket protocol handler
+        self.out = FrameQueue()               ## frames waiting to be send to self.sock
+        self.last_recv_tm = time.time()       ## most recent time any data was received from self.sock
+        self.last_ping_tm = self.last_recv_tm ## most recent time a PING was sent to self.sock
+        self.closing = False                  ## True: protocol reported close but data to send still pending
+        self.sock = None                      ## TCP/IP socket accepted by WebSocketServer
+        self.addr = None                      ## string, remote client address "IP:PORT"
+        ## members maintained by NetworkBackend
+        self.mac_addr = None                  ## bytes, this client's MAC address
+        self.pkt_sink = None                  ## Pollable, this client's separate packet sink
 
     def open(self, sock, addr):
         self.sock = sock
         self.addr = f'{addr[0]}:{addr[1]}'
+        self.netbe.attach_client(self)
         super().open(sock.fileno())
 
     def close(self):
         super().close()
-        self.server.unregister_ws_client(self.mac)
-        self.ws_server.remove_ws_client(self)
+        self.netbe.detach_client(self)
+        self.ws_server.remove_client(self)
         if self.sock is not None:
             self.sock.close()
             self.sock = None
@@ -129,22 +132,7 @@ class WebSocketClient(Pollable):
         for ev in self.proto.events_received():
             if isinstance(ev, Frame):
                 if ev.opcode == Opcode.BINARY:
-                    dst_mac, src_mac = struct.unpack_from('6s6s', ev.data)
-                    if self.mac is None:
-                        self.mac = src_mac
-                        self.server.register_ws_client(self.mac, self)
-                        logger.info(f'{self.addr}: registered MAC address {mac2str(self.mac)}')
-                    if dst_mac[0] & 0x1:
-                        for ws_client in self.server.mac2ws.values():
-                            if ws_client != self:
-                                ws_client.send(ev.data)
-                        self.server.tap_dev.send(ev.data)
-                    else:
-                        ws_client = self.server.mac2ws.get(dst_mac, None)
-                        if ws_client:
-                            ws_client.send(ev.data)
-                        else:
-                            self.server.tap_dev.send(ev.data)
+                    self.netbe.forward_from_ws_client(self, ev.data)
                 elif ev.opcode == Opcode.PING:
                     self.proto.send_pong(ev.data)
                 elif ev.opcode != Opcode.PONG and ev.opcode != Opcode.CLOSE:
