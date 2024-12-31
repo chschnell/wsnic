@@ -34,7 +34,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         self.eth_iface = self.config.eth_iface
         self.dhcp_server = None
         self.is_opened = False
-        self.restrict_inbound = False
+        self.restrict_inbound = True
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
