@@ -133,12 +133,12 @@ class BridgedVethCLient(Pollable):
             self.wants_send(False)
         else:
             self.out.trim_frame(self.sock.send(eth_frame))
-            log_eth_frame('ws->veth', eth_frame, logger)
+            #log_eth_frame('ws->veth', eth_frame, logger)
 
     def recv_ready(self):
         eth_frame = self.sock.recv(65535)
         self.ws_client.send(eth_frame)
-        log_eth_frame('veth->ws', eth_frame, logger)
+        #log_eth_frame('veth->ws', eth_frame, logger)
         """
         eth_frame, addr = self.sock.recvfrom(65535)
 

@@ -44,8 +44,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
         """
         run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'],
             logger, check=do_install)
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.br_iface, '-j', 'MASQUERADE'],
-            logger, check=do_install)
+        #run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.br_iface, '-j', 'MASQUERADE'],
+        #    logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'],
             logger, check=do_install)
         if self.restrict_inbound:
