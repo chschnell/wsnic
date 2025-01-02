@@ -3,7 +3,7 @@
 ## Shared package classes.
 ##
 
-import logging, subprocess
+import logging, subprocess, struct
 
 from select import EPOLLIN, EPOLLOUT
 from collections import deque
@@ -16,6 +16,28 @@ def run(cmd_line, logger, check=False):
 def mac2str(mac):
     mac = mac.hex()
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
+
+ETH_TYPES = {
+    0x0800: 'IPv4',
+    0x86DD: 'IPv6',
+    0x0806: 'ARP',
+}
+
+IP_PROTOS = {
+    0: 'IPv6-HOPOPT',
+    1: 'ICMP',
+    2: 'IGMP',
+    6: 'TCP',
+    17: 'UDP',
+}
+
+def log_eth_frame(tag, eth_frame, logger):
+    dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
+    eth_type = ETH_TYPES.get(eth_type, None)
+    if eth_type is None:
+        eth_type = hex(eth_type)
+    ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
+    logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
 
 class Pollable:
     def __init__(self, server, epoll_flags=EPOLLIN):
@@ -120,4 +142,8 @@ class NetworkBackend:
 
     def forward_from_ws_client(self, ws_client, eth_frame):
         ## Called by WebSocketClient.recv() when a new eth_frame has arrived.
+        pass
+
+    def dhcp_lease_assigned(self, mac_addr, ip_addr):
+        ## Called by DhcpNetwork.assign_address() whenever a DHCP lease has been assigned to a MAC address.
         pass

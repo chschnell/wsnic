@@ -8,8 +8,9 @@ import os, re, logging, configparser, argparse, time, ipaddress, select
 from wsnic.websock import WebSocketServer
 from wsnic.dhcp import DhcpNetwork
 from wsnic.nbe_tapdev import TapDeviceNetworkBackend
-from wsnic.nbe_pktsock import PacketSocketNetworkBackend
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
+from wsnic.nbe_pktsock import PacketSocketNetworkBackend
+from wsnic.nbe_brveth import BridgedVethNetworkBackend
 
 logger = logging.getLogger('main')
 
@@ -54,9 +55,9 @@ class WsnicServer:
         self.netbe_class = netbe_class          ## NetworkBackend class
         self.netbe = None                       ## NetworkBackend, instance of netbe_class created in run()
         self.ws_server = None                   ## WebSocketServer, created in run()
-        self.dhcp_network = DhcpNetwork(config) ## backend for DHCP request handler
         self.epoll = select.epoll()             ## single epoll object for all open sockets and files
         self.pollables = {}                     ## dict(int fd => Pollable pollable)
+        self.dhcp_network = DhcpNetwork(self)   ## backend for DHCP request handler
 
     def register_pollable(self, fd, pollable, epoll_flags):
         if fd in self.pollables:
@@ -77,6 +78,8 @@ class WsnicServer:
         if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
             with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
                 f_out.write('1\n')
+        else:
+            run(['sysctl', '-w', 'net.ipv4.ip_forward=1'], logger, check=True)
 
         self.netbe = self.netbe_class(self)
         self.netbe.open()
@@ -118,8 +121,8 @@ class WsnicServer:
 
 def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to TAP device proxy server.')
-    parser.add_argument('-n', help='use network backend NETBE (tapdev, brtap or pktsock; default: tapdev)',
-        choices=['tapdev', 'brtap', 'pktsock'], default='tapdev', dest='netbe', metavar='NETBE')
+    parser.add_argument('-n', help='use network backend NETBE (tapdev, brtap, brveth or pktsock; default: tapdev)',
+        choices=['tapdev', 'brtap', 'brveth', 'pktsock'], default='tapdev', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
@@ -134,6 +137,8 @@ def main():
         netbe_class = TapDeviceNetworkBackend
     elif args.netbe == 'brtap':
         netbe_class = BridgedTapNetworkBackend
+    elif args.netbe == 'brveth':
+        netbe_class = BridgedVethNetworkBackend
     elif args.netbe == 'pktsock':
         netbe_class = PacketSocketNetworkBackend
 

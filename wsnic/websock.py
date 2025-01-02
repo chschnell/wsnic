@@ -8,6 +8,7 @@ import logging, socket, time
 import struct
 
 from websockets.server import ServerProtocol
+from websockets.protocol import State
 from websockets.http11 import Request
 from websockets.frames import Frame, Opcode
 
@@ -119,6 +120,11 @@ class WebSocketClient(Pollable):
             self._pump()
 
     def send(self, eth_frame):
+        """
+        if self.proto.state == State.OPEN:
+            self.proto.send_binary(eth_frame)
+            self._pump()
+        """
         self.proto.send_binary(eth_frame)
         self._pump()
 

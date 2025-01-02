@@ -5,7 +5,7 @@
 
 import os, logging, struct, socket
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, mac2str
+from wsnic import Pollable, NetworkBackend, FrameQueue, mac2str, log_eth_frame
 
 logger = logging.getLogger('pktsock')
 
@@ -66,14 +66,17 @@ class PacketSocket(Pollable):
             self.out.trim_frame(self.sock.send(eth_frame))
 
             dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
-            logger.info(f'ws->tap {src_mac.hex()}->{dst_mac.hex()} len={len(eth_frame)} eth_type={hex(eth_type)} ip_proto={ip_proto}')
+            #logger.info(f'ws->tap {src_mac.hex()}->{dst_mac.hex()} len={len(eth_frame)} eth_type={hex(eth_type)} ip_proto={ip_proto}')
+            log_eth_frame('ws->tap', eth_frame, logger)
 
     def recv_ready(self):
         eth_frame = self.sock.recv(65535)
+
         dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
         if (self.ws_client.mac_addr and self.ws_client.mac_addr == dst_mac) or dst_mac[0] & 1:
             self.ws_client.send(eth_frame)
-            logger.info(f'tap->ws {src_mac.hex()}->{dst_mac.hex()} len={len(eth_frame)} eth_type={hex(eth_type)} ip_proto={ip_proto}')
+            #logger.info(f'tap->ws {src_mac.hex()}->{dst_mac.hex()} len={len(eth_frame)} eth_type={hex(eth_type)} ip_proto={ip_proto}')
+            log_eth_frame('tap->ws', eth_frame, logger)
         """
         if eth_type != 0x800 or ip_proto != 6 or (tcp_src_port != 22 and tcp_dst_port != 22):
             if eth_type == 0x800 and ip_proto == 6:

@@ -227,9 +227,10 @@ class DhcpNetwork:
         OptionEnum.DOMAIN_SEARCH, OptionEnum.NETBIOS_NS_IPS,
         OptionEnum.NETBIOS_SCOPE, OptionEnum.CLASSLESS_ROUTE ]
 
-    def __init__(self, config):
-        self.config = config
-        self.hosts = [self.Host(addr) for addr in config.host_addrs]
+    def __init__(self, server):
+        self.server = server
+        self.config = server.config
+        self.hosts = [self.Host(addr) for addr in self.config.host_addrs]
         self.mac2host = {}  ## dict(bytes mac[6] => Host host, ...)
 
     def handle_request(self, data, addr):
@@ -341,6 +342,7 @@ class DhcpNetwork:
     def assign_address(self, mac):
         if mac in self.mac2host:
             host = self.mac2host[mac]
+            self.server.netbe.dhcp_lease_assigned(mac, host.ip)
             if host.is_assigned:
                 logger.info(f're-assigned IP address {host.ip} to MAC {mac2str(mac)}')
             else:

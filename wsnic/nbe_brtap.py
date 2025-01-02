@@ -44,6 +44,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
         """
         run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'],
             logger, check=do_install)
+        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.br_iface, '-j', 'MASQUERADE'],
+            logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'],
             logger, check=do_install)
         if self.restrict_inbound:
@@ -58,16 +60,15 @@ class BridgedTapNetworkBackend(NetworkBackend):
             return
         self.is_opened = True
         ## create bridge
+        """
         run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge'], logger, check=True)
-        run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}',
+        """
+        run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge', 'stp_state', '0'], logger, check=True)
+        run(['ip', 'link', 'set', self.br_iface, 'address', '00:0a:e7:be:ee:ef'], logger, check=True)
+        run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+',
             'dev', self.br_iface], logger, check=True)
         run(['ip', 'link', 'set', self.br_iface, 'up'], logger, check=True)
         ## setup bridge NAT rules
-        if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
-            with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
-                f_out.write('1\n')
-        else:
-            run(['sysctl', '-w', 'net.ipv4.ip_forward=1'], logger, check=True)
         self._install_nat_rules(True)
         logger.info(f'created TAP bridge {self.br_iface}')
         ## install DHCP server on bridge
@@ -86,7 +87,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         self.is_opened = False
 
     def attach_client(self, ws_client):
-        tap_dev = BridgedTapDevice(self.server, ws_client)
+        tap_dev = self._create_pollable(ws_client)
         tap_dev.open()
         ws_client.pkt_sink = tap_dev
         super().attach_client(ws_client)
@@ -99,6 +100,9 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
     def forward_from_ws_client(self, ws_client, eth_frame):
         ws_client.pkt_sink.send(eth_frame)
+
+    def _create_pollable(self, ws_client):
+        return BridgedTapDevice(self.server, ws_client)
 
 class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
@@ -121,6 +125,7 @@ class BridgedTapDevice(Pollable):
 
         ## attach TAP device to bridge and bring it up
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
+        #run(['ip', 'addr', 'add', '192.168.2.2/24', 'dev', self.tap_iface], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
         logger.info(f'created TAP device {self.tap_iface}')
 
