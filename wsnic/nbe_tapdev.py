@@ -117,8 +117,12 @@ class TapDevice(Pollable):
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
+        """
         run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j',
             'MASQUERADE'], logger, check=do_install)
+        """
+        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-s', self.config.subnet, '!',
+            '-o', self.eth_iface, '-j', 'MASQUERADE'], logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.tap_iface,
             '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.tap_iface, '-o', self.eth_iface,

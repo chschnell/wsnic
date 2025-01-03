@@ -38,12 +38,12 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
-        """
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-s', self.config.bridge_subnet,
+        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-s', self.config.subnet, '!',
             '-o', self.eth_iface, '-j', 'MASQUERADE'], logger, check=do_install)
         """
         run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j', 'MASQUERADE'],
             logger, check=do_install)
+        """
         #run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.br_iface, '-j', 'MASQUERADE'],
         #    logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'],
