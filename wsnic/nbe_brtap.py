@@ -70,7 +70,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         run(['ip', 'link', 'set', self.br_iface, 'up'], logger, check=True)
         ## setup bridge NAT rules
         self._install_nat_rules(True)
-        logger.info(f'created TAP bridge {self.br_iface}')
+        logger.info(f'created bridge {self.br_iface}')
         ## install DHCP server on bridge
         self.dhcp_server = DhcpServer(self.server)
         self.dhcp_server.open(self.br_iface)
@@ -83,7 +83,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
             self.dhcp_server = None
         self._install_nat_rules(False)
         run(['ip', 'link', 'del', self.br_iface], logger)
-        logger.info(f'destroyed TAP bridge {self.br_iface}')
+        logger.info(f'destroyed bridge {self.br_iface}')
         self.is_opened = False
 
     def attach_client(self, ws_client):
@@ -127,14 +127,14 @@ class BridgedTapDevice(Pollable):
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
         #run(['ip', 'addr', 'add', '192.168.2.2/24', 'dev', self.tap_iface], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
-        logger.info(f'created TAP device {self.tap_iface}')
+        logger.info(f'created bridged TAP device {self.tap_iface}')
 
     def close(self):
         fd = self.fd
         super().close()
         if fd is not None:
             os.close(fd)
-            logger.info(f'destroyed TAP device {self.tap_iface}')
+            logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
     def send(self, eth_frame):
         if len(eth_frame):
