@@ -67,13 +67,13 @@ WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (f
 
 ### Self-signed TLS server certificate
 
-The following instructions use **`wsnic.example.com`** as the DNS hostname and **'/var/local/crt'** as the directory where the TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
+The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/var/local/crt`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
 
 The DNS hostname doesn't need to be fully qualified in private networks, it might be `localhost` if wsnic and browser are running on the same machine.
 
 After generating your self-signed certificate you have to configure your browser to accept it.
 
-#### Generate a self-signed certificate
+#### Step 1: Generate a self-signed certificate
 
 To generate a simple certificate in directory `/var/local/crt` for hostname `wsnic.example.com` enter:
 
@@ -109,7 +109,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -addext "subjectAltName=DNS:wsnic2.example.com,IP:12.34.56.78"
 ```
 
-#### Setup browser to accept a self-signed certificate
+#### Step 2: Setup browser to accept a self-signed certificate
 
 By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser once by pointing it at your wsnic server using a HTTPS URL:
 
@@ -124,11 +124,3 @@ Failed to open a WebSocket connection: invalid Connection header: keep-alive.
 
 You cannot access a WebSocket server directly with a browser. You need a WebSocket client.
 ```
-
-
-# ############################################################################
-
-## TLS termination proxy server
-
-wsnic is a TCP WebSocket server (and thus supports only `ws://` WebSocket URLs directly), if you need support for TLS connections (`wss://` URLs) you have to setup an additional [TLS termination proxy](https://en.wikipedia.org/wiki/TLS_termination_proxy) server.
-
