@@ -5,7 +5,7 @@
 * uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * supports WebSockets Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
 * provides built-in DHCP service on the network backend answering to WebSocket clients
-* uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and the network devices
+* uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and  network devices
 * sends periodic PINGs to idle WebSocket clients
 
 ## Installation
@@ -56,7 +56,7 @@ options:
 
 ## WebSockets Secure support
 
-WebSockets Secure (`wss://`) support is optional and only enabled if both a TLS server certificate and key file are defined in `wsnic.conf`. This means you must have:
+WebSockets Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined in `wsnic.conf`, this implies that you have:
 
 1. a DNS record for the hostname of the wsnic server
 2. a TLS server certificate issued for that DNS hostname
