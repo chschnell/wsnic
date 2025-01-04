@@ -60,7 +60,7 @@ Command line options:
 $ ./wsnic.sh -h
 usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v]
 
-WebSocket to TAP device proxy server.
+WebSocket to virtual network device proxy server.
 
 options:
   -h, --help    show this help message and exit
