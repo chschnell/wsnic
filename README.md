@@ -10,7 +10,7 @@
 
 ## Installation
 
-Instructions below are tested with Debian 12 (Bookworm).
+Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
 ### Step 1: Install required linux tools
 
@@ -20,7 +20,7 @@ First, make sure that the binaries required by wsnic (`ip`, `iptables` and optio
 sudo apt install iproute2 iptables stunnel
 ```
 
-stunnel is only needed for `wss://` support and otherwise optional.
+stunnel is only required for `wss://` support and otherwise not needed.
 
 ### Step 2: Clone and initialize this repository
 
