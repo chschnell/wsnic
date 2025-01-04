@@ -1,5 +1,5 @@
 ##
-## wsnic - WebSocket to TAP device proxy server
+## wsnic - WebSocket to virtual network device proxy server for linux
 ## Main entry point.
 ##
 
@@ -158,7 +158,7 @@ class WsnicServer:
         self.epoll.close()
 
 def main():
-    parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to TAP device proxy server.')
+    parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to virtual network device proxy server.')
     parser.add_argument('-n', help='use network backend NETBE (tapdev, brtap, brveth or pktsock; default: tapdev)',
         choices=['tapdev', 'brtap', 'brveth', 'pktsock'], default='tapdev', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
