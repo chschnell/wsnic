@@ -12,7 +12,7 @@
 
 Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
-### Step 1: Install required linux tools
+#### Step 1/3: Install required linux tools
 
 First, make sure that the binaries required by wsnic (`ip`, `iptables` and optionally `stunnel`) are installed, for Debian:
 
@@ -22,7 +22,7 @@ sudo apt install iproute2 iptables stunnel
 
 stunnel is only required for `wss://` support and otherwise not needed.
 
-### Step 2: Clone and initialize this repository
+#### Step 2/3: Clone and initialize this repository
 
 Clone a working copy of this repository. Then, install `websockets` into your working copy using `pip`:
 
@@ -35,7 +35,7 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-### Step 3: Configure your installation
+#### Step 3/3: Configure your installation
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
@@ -88,7 +88,7 @@ The DNS hostname doesn't need to be fully qualified in private networks, it migh
 
 Setting up a self-signed certificate involves two steps, after generating it you also have to configure your browser to accept it.
 
-#### Step 1: Generate a self-signed certificate
+#### Step 1/2: Generate a self-signed certificate
 
 To issue a basic self-signed TLS server certificate for DNS hostname `wsnic.example.com`:
 
@@ -110,7 +110,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
 
 You can add multiple alternate DNS names and IP addresses, use comma `,` to separate them.
 
-#### Step 2: Setup browser to accept the self-signed certificate
+#### Step 2/2: Setup browser to accept the self-signed certificate
 
 By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser once by pointing it at your wsnic server using a HTTPS URL:
 
@@ -127,3 +127,18 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 ```
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
+
+## DHCP server dnsmasq
+
+In order to use [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) with wsnic it only needs to be installed, run these installation commands under Debian:
+
+```bash
+sudo apt install dnsmasq
+
+sudo systemctl stop dnsmasq
+sudo systemctl disable dnsmasq
+```
+
+By default, the debian installer configures the dnsmasq systemd service to be started during boot time, and it also starts the service at the end of the installation procedure.
+
+To generally avoid conflicts no other DHCP server should be running on the same host as wsnic, the `systemctl stop` and `disable` commands make sure that dnsmasq is not running before wsnic is started.
