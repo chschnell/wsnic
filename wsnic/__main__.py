@@ -3,7 +3,8 @@
 ## Main entry point.
 ##
 
-import os, re, logging, configparser, argparse, time, ipaddress, select
+import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
+import tempfile, subprocess
 
 from wsnic.websock import WebSocketServer
 from wsnic.dhcp import DhcpNetwork
@@ -20,6 +21,9 @@ class WsnicConfig:
         self.ws_server_port = 8070
         self.eth_iface = 'eth0'
         self.subnet = '192.168.2.0/24'
+        self.wss_server_port = 8071
+        self.wss_server_cert = None
+        self.wss_server_key = None
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
@@ -34,7 +38,7 @@ class WsnicConfig:
                 if hasattr(self, opt_name):
                     if opt_name in ['dhcp_domain_name_server']:
                         opt_value = re.split(r'[,:;\s]+', opt_value)
-                    elif opt_name in ['ws_server_port', 'dhcp_lease_time', 'dhcp_mtu']:
+                    elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time', 'dhcp_mtu']:
                         opt_value = int(opt_value)
                     elif opt_value == '':
                         opt_value = None
@@ -49,12 +53,55 @@ class WsnicConfig:
         self.broadcast_addr = str(subnet.broadcast_address)
         self.netmask = str(subnet.netmask)
 
+class StunnelProxy:
+    def __init__(self, config):
+        self.config = config
+        self.stunnel_conf = None
+        self.stunnel_p = None
+
+    def open(self):
+        if not os.path.isfile(self.config.wss_server_cert):
+            logger.warning(f'{self.config.wss_server_cert}: file not found, TLS support diabled')
+            return
+        elif shutil.which('stunnel') is None:
+            logger.warning(f'stunnel: file not found, TLS support diabled (Debian: install apt package stunnel)')
+            return
+
+        stunnel_conf = [
+            'foreground = yes',
+            'syslog = no',
+            '',
+            '[wsnic]',
+            'TIMEOUTclose = 0',
+            f'accept = {self.config.wss_server_port}',
+            f'connect = 127.0.0.1:{self.config.ws_server_port}',
+            f'cert = {self.config.wss_server_cert}'
+        ]
+        if self.config.wss_server_key:
+            stunnel_conf.append(f'key = {self.config.wss_server_key}')
+        self.stunnel_conf = tempfile.NamedTemporaryFile(delete=False)
+        self.stunnel_conf.write('\n'.join(stunnel_conf).encode() + b'\n')
+        self.stunnel_conf.close()
+
+        logger.info(f'stunnel.conf written to {self.stunnel_conf.name}, starting stunnel')
+        self.stunnel_p = subprocess.Popen(['stunnel', self.stunnel_conf.name])
+
+    def close(self):
+        if self.stunnel_p:
+            self.stunnel_p.terminate()
+            self.stunnel_p.wait()
+            self.stunnel_p = None
+        if self.stunnel_conf:
+            os.unlink(self.stunnel_conf.name)
+            self.stunnel_conf = None
+
 class WsnicServer:
     def __init__(self, config, netbe_class):
         self.config = config                    ## WsnicConfig
         self.netbe_class = netbe_class          ## NetworkBackend class
         self.netbe = None                       ## NetworkBackend, instance of netbe_class created in run()
         self.ws_server = None                   ## WebSocketServer, created in run()
+        self.stunnel = None
         self.epoll = select.epoll()             ## single epoll object for all open sockets and files
         self.pollables = {}                     ## dict(int fd => Pollable pollable)
         self.dhcp_network = DhcpNetwork(self)   ## backend for DHCP request handler
@@ -87,6 +134,10 @@ class WsnicServer:
         self.ws_server = WebSocketServer(self)
         self.ws_server.open()
 
+        if self.config.wss_server_cert:
+            self.stunnel = StunnelProxy(self.config)
+            self.stunnel.open()
+
         last_refresh_tm = time.time()
         terminated = False
         while not terminated:
@@ -117,6 +168,8 @@ class WsnicServer:
         if self.netbe:
             self.netbe.close()
             self.netbe = None
+        if self.stunnel:
+            self.stunnel.close()
         self.epoll.close()
 
 def main():
@@ -130,6 +183,12 @@ def main():
 
     if os.geteuid() != 0:
         print(f'error: must be run by root')
+        return
+    elif shutil.which('ip') is None:
+        print(f'ip: file not found (Debian: install apt package iproute2)')
+        return
+    elif shutil.which('iptables') is None:
+        print(f'iptables: file not found (Debian: install apt package iptables)')
         return
 
     netbe_class = None

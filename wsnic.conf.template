@@ -9,9 +9,29 @@
 ws_server_addr=127.0.0.1
 
 #
-# WebSocket server port
+# WebSocket server port (ws://)
 #
 ws_server_port=8070
+
+#
+# Secure WebSocket server port (wss://)
+# To enable wss support point wss_server_cert and optionally wss_server_key
+# to valid TLS server certificate files.
+#
+wss_server_port=8071
+
+#
+# PEM formatted file containing either just the public server certificate or
+# an entire certificate chain including public key, private key, and root
+# certificates.
+#
+wss_server_cert=
+
+#
+# Optional PEM formatted file containing just the private-key of the server
+# certificate.
+#
+wss_server_key=
 
 #
 # Interface name of your existing upstream NIC
