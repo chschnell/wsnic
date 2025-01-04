@@ -110,3 +110,5 @@ Failed to open a WebSocket connection: invalid Connection header: keep-alive.
 
 You cannot access a WebSocket server directly with a browser. You need a WebSocket client.
 ```
+
+This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
