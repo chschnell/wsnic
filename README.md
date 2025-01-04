@@ -63,13 +63,13 @@ WebSockets Secure (`wss://`) support is optional and only enabled if a TLS serve
 
 If your wsnic server has a public DNS record for its hostname you should use a service like [Let’s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
 
-WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (for DNS hostname `wsnic.example.com` and wss port `8071`).
+WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (for DNS hostname `wsnic.example.com` and default wss port `8071`).
 
 ### Self-signed TLS server certificate
 
 The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/var/local/crt`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
 
-The DNS hostname doesn't need to be fully qualified in private networks, it might also be `localhost` if wsnic and browser are running on the same machine.
+The DNS hostname doesn't need to be fully qualified in private networks, it might also be just `localhost` if wsnic (WebSocket server) and browser (WebSocket client) are running on the same machine.
 
 Setting up a self-signed certificate involves two steps, after generating it you also have to configure your browser to accept it.
 
