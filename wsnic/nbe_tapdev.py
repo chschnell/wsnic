@@ -17,12 +17,14 @@ from wsnic.dhcp import DhcpServer
 logger = logging.getLogger('tapdev')
 
 TAP_CLONE_DEVICE = '/dev/net/tun'
+TUNSETIFF = 0x400454ca
 
-TUNSETIFF      = 0x400454ca
-SIOCGIFFLAGS   = 0x00008913
-SIOCSIFFLAGS   = 0x00008914
-SIOCSIFADDR    = 0x00008916
-SIOCSIFNETMASK = 0x0000891C
+## Socket configuration controls
+SIOCGIFFLAGS   = 0x8913 ## get flags
+SIOCSIFFLAGS   = 0x8914 ## set flags
+SIOCSIFADDR    = 0x8916 ## set interface address
+SIOCSIFNETMASK = 0x891C ## set interface network mask
+SIOCSIFMTU     = 0x8922 ## set interface MTU
 
 IFF_UP    = 0x1
 IFF_TAP   = 0x0002
@@ -64,17 +66,16 @@ class TapDeviceNetworkBackend(NetworkBackend):
         #   else if LSB is set (broadcast or multicast):
         #     forward eth_frame to all attached ws_clients
         #
-        if len(self.mac_to_client) == 1:
-            next(iter(self.mac_to_client.values())).send(eth_frame)
+        dst_mac = eth_frame[ : 6 ]
+        dst_ws_client = self.mac_to_client.get(dst_mac, None)
+        if dst_ws_client:
+            dst_ws_client.send(eth_frame)
+        elif dst_mac[0] & 0x1:
+            ## LSB in first octet: 0=UNICAST, 1=MULTICAST (and also BROADCAST with all octets being 0xff)
+            for ws_client_i in self.mac_to_client.values():
+                ws_client_i.send(eth_frame)
         else:
-            dst_mac = eth_frame[ : 6 ]
-            dst_ws_client = self.mac_to_client.get(dst_mac, None)
-            if dst_ws_client:
-                dst_ws_client.send(eth_frame)
-            elif dst_mac[0] & 0x1:
-                ## LSB in first octet: 0=UNICAST, 1=MULTICAST (and also BROADCAST with all octets being 0xff)
-                for ws_client_i in self.mac_to_client.values():
-                    ws_client_i.send(eth_frame)
+            logger.debug(f'dropped packet to ws:{mac2str(dst_mac)}')
 
     def forward_from_ws_client(self, ws_client, eth_frame):
         # called by WebSocketClient.recv() when a new eth_frame has arrived.
@@ -112,17 +113,13 @@ class TapDevice(Pollable):
     def __init__(self, server):
         super().__init__(server)
         self.eth_iface = self.config.eth_iface
-        self.tap_iface = None       ## string, TAP device name, for example "wsnic0"
+        self.tap_iface = None       ## string, TAP device name, for example "wstap0"
         self.out = FrameQueue()     ## frames waiting to be send to tap device
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
-        """
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j',
-            'MASQUERADE'], logger, check=do_install)
-        """
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-s', self.config.subnet, '!',
-            '-o', self.eth_iface, '-j', 'MASQUERADE'], logger, check=do_install)
+        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface,
+            '-j', 'MASQUERADE'], logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.tap_iface,
             '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], logger, check=do_install)
         run(['iptables', cmd, 'FORWARD', '-i', self.tap_iface, '-o', self.eth_iface,
@@ -134,7 +131,7 @@ class TapDevice(Pollable):
         os.set_blocking(self.fd, False)
 
         ## create TAP device, keep its interface name in self.tap_iface and its file descriptor in self.fd
-        ifreq = struct.pack('16sH', 'wsnic%d'.encode(), IFF_TAP | IFF_NO_PI)
+        ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
         tap_iface_enc = tunsetiff_result[:16].rstrip(b'\0')
         self.tap_iface = tap_iface_enc.decode()
@@ -154,10 +151,14 @@ class TapDevice(Pollable):
             ifreq = struct.pack('16sH2s4s8s', tap_iface_enc, socket.AF_INET, b'\x00'*2, socket.inet_aton(self.config.netmask), b'\x00'*8) 
             fcntl.ioctl(sockfd, SIOCSIFNETMASK, ifreq)
 
+            ## set TAP device MTU
+            ifreq = struct.pack('16sH', tap_iface_enc, 1500)
+            fcntl.ioctl(sockfd, SIOCSIFMTU, ifreq)
+
             ## bring TAP device up
-            ifreq = struct.pack('16sh', tap_iface_enc, 0)
-            flags = struct.unpack('16sh', fcntl.ioctl(sockfd, SIOCGIFFLAGS, ifreq))[1]
-            ifreq = struct.pack('16sh', tap_iface_enc, flags | IFF_UP)
+            ifreq = struct.pack('16sH', tap_iface_enc, 0)
+            flags = struct.unpack('16sH', fcntl.ioctl(sockfd, SIOCGIFFLAGS, ifreq))[1]
+            ifreq = struct.pack('16sH', tap_iface_enc, flags | IFF_UP)
             fcntl.ioctl(sockfd, SIOCSIFFLAGS, ifreq)
         finally:
             sock.close()
