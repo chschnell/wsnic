@@ -69,13 +69,13 @@ WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (f
 
 The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/var/local/crt`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
 
-The DNS hostname doesn't need to be fully qualified in private networks, it might be `localhost` if wsnic and browser are running on the same machine.
+The DNS hostname doesn't need to be fully qualified in private networks, it might also be `localhost` if wsnic and browser are running on the same machine.
 
-After generating your self-signed certificate you have to configure your browser to accept it.
+Setting up a self-signed certificate involves two steps, after generating it you also have to configure your browser to accept it.
 
 #### Step 1: Generate a self-signed certificate
 
-To generate a simple certificate in directory `/var/local/crt` for hostname `wsnic.example.com` enter:
+To issue a simple certificate in directory `/var/local/crt` for hostname `wsnic.example.com` enter:
 
 ```bash
 mkdir /var/local/crt
@@ -85,23 +85,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com"
 ```
 
-If needed, you can add alternate server names and/or IP addresses to your certificate which you can later use in WebSocket URLs. To add an alternate server name `wsnic2.example.com`:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
-  -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com" \
-  -addext "subjectAltName=DNS:wsnic2.example.com"
-```
-
-To add an IP address `12.34.56.78`:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
-  -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com" \
-  -addext "subjectAltName=IP:12.34.56.78"
-```
-
-To specify multiple alternate server names and IP addresses simply seperate them with commas `,`:
+If needed, you can issue the certificate for additional DNS names and/or IP addresses, here an example that adds DNS name `wsnic2.example.com` and IP address `12.34.56.78`:
 
 ```bash
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
@@ -109,7 +93,9 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -addext "subjectAltName=DNS:wsnic2.example.com,IP:12.34.56.78"
 ```
 
-#### Step 2: Setup browser to accept a self-signed certificate
+You can add multiple alternate DNS names and IP addresses, use comma `,` to separate them.
+
+#### Step 2: Setup browser to accept the self-signed certificate
 
 By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser once by pointing it at your wsnic server using a HTTPS URL:
 
