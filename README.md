@@ -56,7 +56,7 @@ options:
 
 ## WebSockets Secure support
 
-WebSockets Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined in `wsnic.conf`, that means you have:
+WebSockets Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined in `wsnic.conf`, which means you need:
 
 1. a DNS record for the hostname of your wsnic server
 2. a TLS server certificate issued for that DNS hostname
