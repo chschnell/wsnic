@@ -67,18 +67,20 @@ class StunnelProxy:
             logger.warning(f'stunnel: file not found, TLS support diabled (Debian: install apt package stunnel)')
             return
 
+        stunnel_foreground = 'yes' if logger.isEnabledFor(logging.DEBUG) else 'quiet'
         stunnel_conf = [
-            'foreground = yes',
-            'syslog = no',
-            '',
-            '[wsnic]',
-            'TIMEOUTclose = 0',
+            f'foreground = {stunnel_foreground}',
+            f'',
+            f'[wsnic]',
+            f'TIMEOUTclose = 0',
+            f'socket = l:TCP_NODELAY=1',
             f'accept = {self.config.wss_server_port}',
-            f'connect = 127.0.0.1:{self.config.ws_server_port}',
+            f'connect = {self.config.ws_server_port}',
             f'cert = {self.config.wss_server_cert}'
         ]
         if self.config.wss_server_key:
             stunnel_conf.append(f'key = {self.config.wss_server_key}')
+
         self.stunnel_conf = tempfile.NamedTemporaryFile(delete=False)
         self.stunnel_conf.write('\n'.join(stunnel_conf).encode() + b'\n')
         self.stunnel_conf.close()
