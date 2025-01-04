@@ -12,7 +12,6 @@
 import os, logging, struct, fcntl, socket
 
 from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str
-from wsnic.dhcp import DhcpServer
 
 logger = logging.getLogger('tapdev')
 
@@ -43,8 +42,10 @@ class TapDeviceNetworkBackend(NetworkBackend):
     def open(self):
         self.tap_dev = TapDevice(self.server)
         self.tap_dev.open()
-        self.dhcp_server = DhcpServer(self.server)
-        self.dhcp_server.open(self.tap_dev.tap_iface)
+        ## install DHCP server on TAP device interface
+        self.dhcp_server = self.server.create_dhcp_server()
+        if self.dhcp_server:
+            self.dhcp_server.open(self.tap_dev.tap_iface)
 
     def close(self):
         if self.dhcp_server:

@@ -6,7 +6,6 @@
 import os, logging, struct, fcntl, socket
 
 from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str, log_eth_frame
-#from wsnic.dhcp import DhcpServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
 logger = logging.getLogger('nbe_brveth')
@@ -16,7 +15,6 @@ SIOCSIFNETMASK = 0x0000891C
 SIOCSIFHWADDR  = 0x00008924
 
 ETH_P_ALL = 0x0003
-#ETH_P_ALL = 0x0800
 
 class BridgedVethNetworkBackend(BridgedTapNetworkBackend):
     def __init__(self, server):

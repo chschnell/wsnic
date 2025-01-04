@@ -6,7 +6,6 @@
 import os, logging, struct, fcntl
 
 from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str
-from wsnic.dhcp import DhcpServer
 
 logger = logging.getLogger('brtap')
 
@@ -66,8 +65,9 @@ class BridgedTapNetworkBackend(NetworkBackend):
         self._install_nat_rules(True)
         logger.info(f'created bridge {self.br_iface}')
         ## install DHCP server on bridge
-        self.dhcp_server = DhcpServer(self.server)
-        self.dhcp_server.open(self.br_iface)
+        self.dhcp_server = self.server.create_dhcp_server()
+        if self.dhcp_server:
+            self.dhcp_server.open(self.br_iface)
 
     def close(self):
         if not self.is_opened:
