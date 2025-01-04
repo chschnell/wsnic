@@ -75,7 +75,7 @@ Setting up a self-signed certificate involves two steps, after generating it you
 
 #### Step 1: Generate a self-signed certificate
 
-To issue a simple certificate in directory `/var/local/crt` for hostname `wsnic.example.com` enter:
+To issue a basic self-signed TLS server certificate for DNS hostname `wsnic.example.com`:
 
 ```bash
 mkdir /var/local/crt
@@ -85,7 +85,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com"
 ```
 
-If needed, you can issue the certificate for additional DNS names and/or IP addresses, here an example that adds DNS name `wsnic2.example.com` and IP address `12.34.56.78`:
+You can also issue your certificate for additional DNS names and/or IP addresses, here an example that adds DNS hostname `wsnic2.example.com` and IP address `12.34.56.78`:
 
 ```bash
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
