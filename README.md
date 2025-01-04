@@ -10,26 +10,41 @@
 
 ## Installation
 
-First, make sure that the required linux tools `ip`, `iptables` and `stunnel` (stunnel is optional and only needed for `wss://` support) are installed, for Debian:
+Instructions below are tested with Debian 12 (Bookworm).
+
+### Step 1: Install required linux tools
+
+First, make sure that the binaries required by wsnic (`ip`, `iptables` and optionally `stunnel`) are installed, for Debian:
 
 ```bash
 sudo apt install iproute2 iptables stunnel
 ```
 
-Clone a working copy of this repository. Next, install `websockets` into your working copy using `pip`:
+stunnel is only needed for `wss://` support and otherwise optional.
+
+### Step 2: Clone and initialize this repository
+
+Clone a working copy of this repository. Then, install `websockets` into your working copy using `pip`:
 
 ```bash
+git clone https://github.com/chschnell/wsnic.git
+
 cd wsnic
 python3 -m venv venv
 venv/bin/pip3 install websockets
+cd ..
 ```
+
+### Step 3: Configure your installation
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
-* `eth_iface=eth0`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, you can check with command `ip addr`.
+* `eth_iface`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, you can check with command `ip addr`.
 * `wss_server_cert` and `wss_server_key`, TLS server certificate and key file, required for `wss://` support
-* `subnet=192.168.2.0/24`, the IP subnet that wsnic will use, this might collide with your private network configuration and must then be changed accordingly
+* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might collide with your private network configuration and must then be changed accordingly
 * `dhcp_domain_name` and `dhcp_domain_name_server`, the DNS domain name and DNS domain name server(s) to be used in DHCP replies
+
+Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in your `wsnic.conf`.
 
 ## Usage
 
