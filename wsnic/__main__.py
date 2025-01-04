@@ -4,10 +4,11 @@
 ##
 
 import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
-import tempfile, subprocess
 
 from wsnic.websock import WebSocketServer
-from wsnic.dhcp import DhcpNetwork
+from wsnic.stunnel import StunnelProxyServer
+from wsnic.dhcp import DhcpServer
+from wsnic.dnsmasq import DnsmasqDhcpServer
 from wsnic.nbe_tapdev import TapDeviceNetworkBackend
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 from wsnic.nbe_pktsock import PacketSocketNetworkBackend
@@ -17,6 +18,7 @@ logger = logging.getLogger('main')
 
 class WsnicConfig:
     def __init__(self, conf_filename):
+        ## settings meant to be overriden in wsnic.conf:
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
         self.eth_iface = 'eth0'
@@ -24,10 +26,16 @@ class WsnicConfig:
         self.wss_server_port = 8071
         self.wss_server_cert = None
         self.wss_server_key = None
+        self.dhcp_service = 'internal'
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
         self.dhcp_mtu = 1500
+        ## network settings dynamically derived from self.subnet:
+        self.server_addr = None
+        self.host_addrs = None
+        self.broadcast_addr = None
+        self.netmask = None
 
         if os.path.isfile(conf_filename):
             with open(conf_filename) as f_in:
@@ -46,67 +54,31 @@ class WsnicConfig:
                 else:
                     logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
 
-        subnet = ipaddress.ip_network(self.subnet)
-        hosts = subnet.hosts()
+        ip_subnet = ipaddress.ip_network(self.subnet)
+        hosts = ip_subnet.hosts()
         self.server_addr = str(next(hosts))
         self.host_addrs = [str(addr) for addr in hosts]
-        self.broadcast_addr = str(subnet.broadcast_address)
-        self.netmask = str(subnet.netmask)
+        self.broadcast_addr = str(ip_subnet.broadcast_address)
+        self.netmask = str(ip_subnet.netmask)
 
-class StunnelProxy:
-    def __init__(self, config):
-        self.config = config
-        self.stunnel_conf = None
-        self.stunnel_p = None
-
-    def open(self):
-        if not os.path.isfile(self.config.wss_server_cert):
-            logger.warning(f'{self.config.wss_server_cert}: file not found, TLS support diabled')
-            return
-        elif shutil.which('stunnel') is None:
-            logger.warning(f'stunnel: file not found, TLS support diabled (Debian: install apt package stunnel)')
-            return
-
-        stunnel_foreground = 'yes' if logger.isEnabledFor(logging.DEBUG) else 'quiet'
-        stunnel_conf = [
-            f'foreground = {stunnel_foreground}',
-            f'',
-            f'[wsnic]',
-            f'TIMEOUTclose = 0',
-            f'socket = l:TCP_NODELAY=1',
-            f'accept = {self.config.wss_server_port}',
-            f'connect = {self.config.ws_server_port}',
-            f'cert = {self.config.wss_server_cert}'
-        ]
-        if self.config.wss_server_key:
-            stunnel_conf.append(f'key = {self.config.wss_server_key}')
-
-        self.stunnel_conf = tempfile.NamedTemporaryFile(delete=False)
-        self.stunnel_conf.write('\n'.join(stunnel_conf).encode() + b'\n')
-        self.stunnel_conf.close()
-
-        logger.info(f'stunnel.conf written to {self.stunnel_conf.name}, starting stunnel')
-        self.stunnel_p = subprocess.Popen(['stunnel', self.stunnel_conf.name])
-
-    def close(self):
-        if self.stunnel_p:
-            self.stunnel_p.terminate()
-            self.stunnel_p.wait()
-            self.stunnel_p = None
-        if self.stunnel_conf:
-            os.unlink(self.stunnel_conf.name)
-            self.stunnel_conf = None
+        self.dhcp_service = self.dhcp_service.lower()
+        if self.dhcp_service == 'dnsmasq':
+            if shutil.which('dnsmasq') is None:
+                self.dhcp_service = 'internal'
+                logger.warning(f'dnsmasq: file not found, falling back to internal DHCP service (Debian: install apt package dnsmasq)')
+        elif self.dhcp_service not in ['internal', 'disabled']:
+            self.dhcp_service = 'internal'
+            logger.warning(f'{conf_filename}: unknown value {self.dhcp_service} for option dhcp_service, falling back to internal DHCP service')
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
-        self.config = config                    ## WsnicConfig
-        self.netbe_class = netbe_class          ## NetworkBackend class
-        self.netbe = None                       ## NetworkBackend, instance of netbe_class created in run()
-        self.ws_server = None                   ## WebSocketServer, created in run()
-        self.stunnel = None
-        self.epoll = select.epoll()             ## single epoll object for all open sockets and files
-        self.pollables = {}                     ## dict(int fd => Pollable pollable)
-        self.dhcp_network = DhcpNetwork(self)   ## backend for DHCP request handler
+        self.config = config            ## WsnicConfig
+        self.netbe_class = netbe_class  ## NetworkBackend class
+        self.netbe = None               ## NetworkBackend, instance of netbe_class created in run()
+        self.ws_server = None           ## WebSocketServer, created in run()
+        self.stunnel = None             ## StunnelProxyServer, created in run()
+        self.epoll = select.epoll()     ## single epoll object for all open sockets and files
+        self.pollables = {}             ## dict(int fd => Pollable pollable)
 
     def register_pollable(self, fd, pollable, epoll_flags):
         if fd in self.pollables:
@@ -123,6 +95,17 @@ class WsnicServer:
             if fd in self.pollables:
                 del self.pollables[fd]
 
+    def create_dhcp_server(self):
+        if self.config.dhcp_service == 'dnsmasq':
+            return DnsmasqDhcpServer(self)
+        elif self.config.dhcp_service == 'disabled':
+            return None
+        else:
+            if self.config.dhcp_service != 'internal':
+                logger.error(f'unexpected dhcp_service config value "{self.config.dhcp_service}", falling back to internal DHCP service')
+                self.config.dhcp_service = 'internal'
+            return DhcpServer(self)
+
     def run(self):
         if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
             with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
@@ -137,7 +120,7 @@ class WsnicServer:
         self.ws_server.open()
 
         if self.config.wss_server_cert:
-            self.stunnel = StunnelProxy(self.config)
+            self.stunnel = StunnelProxyServer(self.config)
             self.stunnel.open()
 
         last_refresh_tm = time.time()
