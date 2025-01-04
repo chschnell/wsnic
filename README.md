@@ -40,7 +40,7 @@ cd ..
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
 * `eth_iface`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, you can check with command `ip addr`.
-* `wss_server_cert` and `wss_server_key`, TLS server certificate and key file, required for `wss://` support
+* `wss_server_cert` and `wss_server_key`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file)
 * `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might collide with your private network configuration and must then be changed accordingly
 * `dhcp_domain_name` and `dhcp_domain_name_server`, the DNS domain name and DNS domain name server(s) to be used in DHCP replies
 
