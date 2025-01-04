@@ -360,7 +360,7 @@ class DhcpNetwork:
 class DhcpServer(Pollable):
     def __init__(self, server):
         super().__init__(server)
-        self.dhcp_network = server.dhcp_network
+        self.dhcp_network = DhcpNetwork(server)
         self.sock = None
 
     def open(self, iface):
