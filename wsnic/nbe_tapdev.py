@@ -9,25 +9,17 @@
 ## - https://github.com/mirceaulinic/py-dhcp-relay
 ## - https://gist.github.com/firaxis/0e538c8e5f81eaa55748acc5e679a36e
 
-import os, logging, struct, fcntl, socket
+import os, logging, struct, fcntl
 
 from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str
 
 logger = logging.getLogger('tapdev')
 
-TAP_CLONE_DEVICE = '/dev/net/tun'
-TUNSETIFF = 0x400454ca
-
-## Socket configuration controls
-SIOCGIFFLAGS   = 0x8913 ## get flags
-SIOCSIFFLAGS   = 0x8914 ## set flags
-SIOCSIFADDR    = 0x8916 ## set interface address
-SIOCSIFNETMASK = 0x891C ## set interface network mask
-SIOCSIFMTU     = 0x8922 ## set interface MTU
-
-IFF_UP    = 0x1
-IFF_TAP   = 0x0002
-IFF_NO_PI = 0x1000
+TAP_CLONE_DEV = '/dev/net/tun'
+TUNSETIFF     = 0x400454ca
+IFF_UP        = 0x1
+IFF_TAP       = 0x0002
+IFF_NO_PI     = 0x1000
 
 class TapDeviceNetworkBackend(NetworkBackend):
     # - maintains a single, shared TAP file Pollable for all ws_clients
@@ -128,57 +120,33 @@ class TapDevice(Pollable):
 
     def open(self):
         ## open TAP clone device
-        self.fd = os.open(TAP_CLONE_DEVICE, os.O_RDWR | os.O_NONBLOCK)
+        self.fd = os.open(TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
+        super().open(self.fd)
         os.set_blocking(self.fd, False)
 
-        ## create TAP device, keep its interface name in self.tap_iface and its file descriptor in self.fd
+        ## create TAP device file, file gets deleted when self.fd is closed
         ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
-        tap_iface_enc = tunsetiff_result[:16].rstrip(b'\0')
-        self.tap_iface = tap_iface_enc.decode()
-        logger.info(f'created TAP device {self.tap_iface}, setting IP to {self.config.server_addr}/{self.config.netmask}')
+        self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            ## bind socket to TAP device
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, tap_iface_enc)
-            sockfd = sock.fileno()
-
-            ## set TAP device IP address
-            ifreq = struct.pack('16sH2s4s8s', tap_iface_enc, socket.AF_INET, b'\x00'*2, socket.inet_aton(self.config.server_addr), b'\x00'*8)
-            fcntl.ioctl(sockfd, SIOCSIFADDR, ifreq)
-
-            ## set TAP device netmask
-            ifreq = struct.pack('16sH2s4s8s', tap_iface_enc, socket.AF_INET, b'\x00'*2, socket.inet_aton(self.config.netmask), b'\x00'*8) 
-            fcntl.ioctl(sockfd, SIOCSIFNETMASK, ifreq)
-
-            ## set TAP device MTU
-            ifreq = struct.pack('16sH', tap_iface_enc, 1500)
-            fcntl.ioctl(sockfd, SIOCSIFMTU, ifreq)
-
-            ## bring TAP device up
-            ifreq = struct.pack('16sH', tap_iface_enc, 0)
-            flags = struct.unpack('16sH', fcntl.ioctl(sockfd, SIOCGIFFLAGS, ifreq))[1]
-            ifreq = struct.pack('16sH', tap_iface_enc, flags | IFF_UP)
-            fcntl.ioctl(sockfd, SIOCSIFFLAGS, ifreq)
-        finally:
-            sock.close()
+        ## set TAP device IP address/netmask/MTU and bring it up
+        run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+', 'dev', self.tap_iface], logger, check=True)
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'mtu', str(self.config.dhcp_mtu)], logger, check=True)
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
 
         ## setup NAT rules for TAP device
         self._install_nat_rules(True)
 
-        super().open(self.fd)
+        logger.info(f'created TAP device {self.tap_iface}')
 
     def close(self):
         fd = self.fd
         super().close()
-        if fd is None:
-            return
-        os.close(fd)
-        self._install_nat_rules(False)
-        if self.tap_iface:
+        if fd is not None:
+            os.close(fd)
+            self._install_nat_rules(False)
             logger.info(f'destroyed TAP device {self.tap_iface}')
-            self.tap_iface = None
 
     def send(self, eth_frame):
         if len(eth_frame):
