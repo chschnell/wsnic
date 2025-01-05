@@ -24,7 +24,7 @@ stunnel is only required for `wss://` support and otherwise not needed.
 
 #### Step 2/3: Clone and initialize this repository
 
-Clone a working copy of this repository. Then, install `websockets` into your working copy using `pip`:
+Clone a working copy of this repository. Then, install `websockets` into the working copy using `pip`:
 
 ```bash
 git clone https://github.com/chschnell/wsnic.git
@@ -35,16 +35,16 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-#### Step 3/3: Configure your installation
+#### Step 3/3: Installation setup
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
-* `eth_iface`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, you can check with command `ip addr`.
-* `wss_server_cert` and `wss_server_key`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file)
-* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might collide with your private network configuration and must then be changed accordingly
+* `eth_iface`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, check with command `ip addr`.
+* `wss_server_cert`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file `wss_server_key`)
+* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might collide with your local network configuration and must then be changed accordingly
 * `dhcp_domain_name` and `dhcp_domain_name_server`, the DNS domain name and DNS domain name server(s) to be used in DHCP replies
 
-Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in your `wsnic.conf`.
+Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in `wsnic.conf`.
 
 ## Usage
 
@@ -78,6 +78,13 @@ WebSockets Secure (`wss://`) support is optional and only enabled if a TLS serve
 
 If your wsnic server has a public DNS record for its hostname you should use a service like [Let’s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
 
+To enable a TLS certificate declare it in `wsnic.conf` using:
+
+```
+wss_server_cert=/var/local/crt/cert.crt
+wss_server_key=/var/local/crt/cert.key
+```
+
 WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (for DNS hostname `wsnic.example.com` and default wss port `8071`).
 
 ### Self-signed TLS server certificate
@@ -100,7 +107,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com"
 ```
 
-You can also issue your certificate for additional DNS names and/or IP addresses, here an example that adds DNS hostname `wsnic2.example.com` and IP address `12.34.56.78`:
+You can also issue the certificate for additional DNS names and/or IP addresses, here an example that adds DNS hostname `wsnic2.example.com` and IP address `12.34.56.78`:
 
 ```bash
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
@@ -109,13 +116,6 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
 ```
 
 You can add multiple alternate DNS names and IP addresses, use comma `,` to separate them.
-
-After creating your certificate add it to your `wsnic.conf` using:
-
-```
-wss_server_cert=/var/local/crt/cert.crt
-wss_server_key=/var/local/crt/cert.key
-```
 
 #### Step 2/2: Setup browser to accept the self-signed certificate
 
@@ -150,7 +150,7 @@ By default, the debian installer configures the dnsmasq systemd service to be st
 
 To generally avoid conflicts no other DHCP server should be running on the same host as wsnic, the `systemctl stop` and `disable` commands make sure that dnsmasq is not running before wsnic is started.
 
-After installing dnsmasq enable it in your `wsnic.conf` using:
+After installing dnsmasq enable it in `wsnic.conf` using:
 
 ```
 dhcp_service=dnsmasq
