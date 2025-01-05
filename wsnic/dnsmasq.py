@@ -29,7 +29,7 @@ class DnsmasqDhcpServer:
         if self.config.dhcp_domain_name:
             dnsmasq_cmdline.append(f'--domain={self.config.dhcp_domain_name}')
 
-        logger.info(f'run child process: {" ".join(dnsmasq_cmdline)}')
+        logger.info(f'start child process: {" ".join(dnsmasq_cmdline)}')
         self.dnsmasq_p = subprocess.Popen(dnsmasq_cmdline)
 
     def close(self):
