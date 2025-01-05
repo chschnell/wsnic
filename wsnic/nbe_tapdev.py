@@ -192,7 +192,7 @@ class TapDevice(Pollable):
         if eth_frame is None:
             self.wants_send(False)
         else:
-            self.out.trim_frame(os.write(self.fd, eth_frame))
+            os.write(self.fd, eth_frame)
 
     def recv_ready(self):
         self.netbe.forward_to_ws_client(os.read(self.fd, 65535))

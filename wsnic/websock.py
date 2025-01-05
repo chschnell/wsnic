@@ -95,8 +95,7 @@ class WebSocketClient(Pollable):
                 self.close()
         else:
             try:
-                n_sent = self.sock.send(eth_frame)
-                self.out.trim_frame(n_sent)
+                self.sock.send(eth_frame)
             except OSError as e:
                 self.close()
                 logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
@@ -120,13 +119,11 @@ class WebSocketClient(Pollable):
             self._pump()
 
     def send(self, eth_frame):
-        """
         if self.proto.state == State.OPEN:
             self.proto.send_binary(eth_frame)
             self._pump()
-        """
-        self.proto.send_binary(eth_frame)
-        self._pump()
+        else:
+            logger.warning(f'{self.addr}: dropped frame in send() due to non-OPEN proto state {self.proto.state}')
 
     def recv(self, ws_data):
         if ws_data:

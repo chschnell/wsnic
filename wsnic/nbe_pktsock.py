@@ -63,7 +63,7 @@ class PacketSocket(Pollable):
         if not eth_frame:
             self.wants_send(False)
         else:
-            self.out.trim_frame(self.sock.send(eth_frame))
+            self.sock.send(eth_frame)
 
             dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
             #logger.info(f'ws->tap {src_mac.hex()}->{dst_mac.hex()} len={len(eth_frame)} eth_type={hex(eth_type)} ip_proto={ip_proto}')

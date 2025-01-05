@@ -102,33 +102,16 @@ class Pollable:
 
 class FrameQueue:
     def __init__(self):
-        self.curr_frame = None
-        self.curr_consumed = 0
         self.queue = deque()
 
     def is_empty(self):
-        return self.curr_frame is None and len(self.queue) == 0
+        return len(self.queue) == 0
 
     def append(self, data):
         self.queue.appendleft(data)
 
     def get_frame(self):
-        if self.curr_frame is None:
-            if len(self.queue) == 0:
-                return None
-            self.curr_frame = self.queue.pop()
-            self.curr_consumed = 0
-        elif self.curr_consumed > 0:
-            return self.curr_frame[ self.curr_consumed : ]
-        return self.curr_frame
-
-    def trim_frame(self, n_bytes):
-        if self.curr_frame:
-            self.curr_consumed += n_bytes
-            if self.curr_consumed >= len(self.curr_frame):
-                self.curr_frame = None
-            else:
-                print(f'*** fragmented frame, sent {n_bytes} but wanted {len(self.curr_frame)}')
+        return self.queue.pop() if len(self.queue) else None
 
 class NetworkBackend:
     def __init__(self, server):

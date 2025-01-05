@@ -130,7 +130,7 @@ class BridgedVethCLient(Pollable):
         if eth_frame is None:
             self.wants_send(False)
         else:
-            self.out.trim_frame(self.sock.send(eth_frame))
+            self.sock.send(eth_frame)
             #log_eth_frame('ws->veth', eth_frame, logger)
 
     def recv_ready(self):
