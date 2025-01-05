@@ -85,7 +85,7 @@ wss_server_cert=/var/local/crt/cert.crt
 wss_server_key=/var/local/crt/cert.key
 ```
 
-WebSocket Secure URL format for the browser is `wss://wsnic.example.com:8071` (for DNS hostname `wsnic.example.com` and default wss port `8071`).
+WebSocket Secure URLs are of the form `wss://wsnic.example.com:8071`.
 
 ### Self-signed TLS server certificate
 
