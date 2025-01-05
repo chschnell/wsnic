@@ -19,12 +19,16 @@ class DnsmasqDhcpServer:
             return
         dhcp_ip_lo = self.config.host_addrs[0]
         dhcp_ip_hi = self.config.host_addrs[-1]
-        dns_servers = ','.join(self.config.dhcp_domain_name_server)
+        dhcp_dns = ','.join(self.config.dhcp_domain_name_server)
         dnsmasq_cmdline = [
-            'dnsmasq', '--no-hosts', '--no-resolv', '--keep-in-foreground', '--no-ping',
-            f'--interface={iface}', f'--listen-address={self.config.server_addr}', '--bind-interfaces',
+            'dnsmasq', '--keep-in-foreground', '--no-hosts', '--no-resolv', '--no-ping', f'--interface={iface}',
+            '--except-interface=lo', f'--listen-address={self.config.server_addr}', '--bind-interfaces',
             f'--dhcp-range={dhcp_ip_lo},{dhcp_ip_hi},{self.config.netmask},{self.config.dhcp_lease_time}s',
-            f'--dhcp-option=6,{dns_servers}' ]
+            f'--dhcp-option=6,{dhcp_dns}', f'--dhcp-option=26,{self.config.dhcp_mtu}'
+        ]
+        if self.config.dhcp_domain_name:
+            dnsmasq_cmdline.append(f'--domain={self.config.dhcp_domain_name}')
+
         logger.info(f'run child process: {" ".join(dnsmasq_cmdline)}')
         self.dnsmasq_p = subprocess.Popen(dnsmasq_cmdline)
 
