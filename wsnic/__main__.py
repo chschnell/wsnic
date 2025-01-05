@@ -111,7 +111,7 @@ class WsnicServer:
             with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
                 f_out.write('1\n')
         else:
-            run(['sysctl', '-w', 'net.ipv4.ip_forward=1'], logger, check=True)
+            Exec(logger, check=True)('sysctl -w net.ipv4.ip_forward=1')
 
         self.netbe = self.netbe_class(self)
         self.netbe.open()

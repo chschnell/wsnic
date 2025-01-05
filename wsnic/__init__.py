@@ -8,11 +8,6 @@ import logging, random, subprocess, struct
 from select import EPOLLIN, EPOLLOUT
 from collections import deque
 
-def run(cmd_line, logger, check=False):
-    if logger.isEnabledFor(logging.INFO):
-        logger.info(f'run: {" ".join(cmd_line)}')
-    subprocess.run(cmd_line, check=check)
-
 def mac2str(mac):
     mac = mac.hex()
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
@@ -31,7 +26,7 @@ def random_private_mac():
     ##   xE:xx:xx:xx:xx:xx
     mac_addr = bytearray(random.randbytes(6))
     mac_addr[0] = (mac_addr[0] & ~0x01) | 0x02
-    return mac_addr.bytes()
+    return bytes(mac_addr)
 
 ETH_TYPES = {
     0x0800: 'IPv4',
@@ -54,6 +49,18 @@ def log_eth_frame(tag, eth_frame, logger):
         eth_type = hex(eth_type)
     ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
     logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
+
+class Exec:
+    def __init__(self, logger, check=False):
+        self.logger = logger
+        self.check = check
+
+    def __call__(self, cmdline, check=None):
+        if isinstance(cmdline, str):
+            cmdline = cmdline.split(' ')
+        if self.logger.isEnabledFor(logging.INFO):
+            self.logger.info(f'$ {" ".join(cmdline)}')
+        subprocess.run(cmdline, check=self.check if check is None else check)
 
 class Pollable:
     ## Base class that wraps an open file descriptor fd for epoll()

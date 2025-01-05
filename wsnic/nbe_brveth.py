@@ -5,7 +5,7 @@
 
 import os, logging, struct, fcntl, socket
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str, log_eth_frame
+from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str, log_eth_frame
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
 logger = logging.getLogger('nbe_brveth')
@@ -49,30 +49,6 @@ class BridgedVethCLient(Pollable):
         self.sock = None                      ## our local packet socket
 
     def set_mac_addr(self, mac_addr):
-        """
-        ifreq = struct.pack('16sH6B8x', self.veth_vm_iface.encode(), socket.AF_INET, *mac_addr)
-        fcntl.ioctl(self.fd, SIOCSIFHWADDR, ifreq)
-        """
-        # ip link set dev <self.veth_vm_iface> down
-        # ip link set dev <self.veth_vm_iface> address <mac2str(mac_addr)>
-        # ip link set dev <self.veth_vm_iface> up
-
-        """
-        super().close()
-        if self.sock:
-            self.sock.close()
-            self.sock = None
-
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'down'], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'addr', mac2str(mac_addr)], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'up'], logger, check=True)
-
-        self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
-        self.sock.bind((self.veth_vm_iface, 0))
-        super().open(self.sock.fileno())
-        """
-
-        #run(['ip', 'link', 'set', self.veth_vm_iface, 'addr', mac2str(mac_addr)], logger, check=True)
         pass
 
     def set_ip_and_netmask(self, ip_addr, netmask):
@@ -88,19 +64,18 @@ class BridgedVethCLient(Pollable):
         self.veth_vm_iface = f'vethvm{BridgedVethCLient.INSTANCE_COUNTER}'
         BridgedVethCLient.INSTANCE_COUNTER += 1
 
-        ## create veth pair, connect veth pair's bridge-side to bridge
-        run(['ip', 'link', 'add', self.veth_br_iface, 'type', 'veth', 'peer', 'name', self.veth_vm_iface], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_br_iface, 'mtu', '1500'], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'mtu', '1500'], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'promisc', 'on'], logger, check=True)
-        """
-        ip link set dev vethvm0 mtu 1500
-        ip link set dev vethbr0 mtu 1500
-        """
-        run(['ip', 'link', 'set', self.veth_br_iface, 'master', self.br_iface], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_br_iface, 'up'], logger, check=True)
-        #run(['ip', 'addr', 'add', '192.168.2.2/24', 'brd', '+', 'dev', self.veth_vm_iface], logger, check=True)
-        run(['ip', 'link', 'set', self.veth_vm_iface, 'up'], logger, check=True)
+        ## create veth pair, attach one side (veth_br_iface) to the bridge
+        run = Exec(logger, check=True)
+        run(f'ip link add dev {self.veth_br_iface} type veth peer name {self.veth_vm_iface}')
+        run(f'ip link set dev {self.veth_br_iface} master {self.br_iface}')
+        run(f'ip link set dev {self.veth_br_iface} mtu {self.config.dhcp_mtu}')
+        run(f'ip link set dev {self.veth_br_iface} promisc on')
+        run(f'ip link set dev {self.veth_vm_iface} mtu {self.config.dhcp_mtu}')
+        run(f'ip link set dev {self.veth_vm_iface} promisc on')
+
+        ## bring both ends of the veth pair up
+        run(f'ip link set dev {self.veth_br_iface} up')
+        run(f'ip link set dev {self.veth_vm_iface} up')
 
         ## open and connect packet socket to veth pair's vm-side
         self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
@@ -116,7 +91,7 @@ class BridgedVethCLient(Pollable):
             self.sock = None
             logger.info(f'destroyed veth pair ({self.veth_br_iface}, {self.veth_vm_iface})')
         if self.veth_br_iface:
-            run(['ip', 'link', 'del', self.veth_br_iface], logger, check=True)
+            Exec(logger, check=True)(f'ip link del {self.veth_br_iface}')
 
     def send(self, eth_frame):
         if len(eth_frame):
@@ -131,22 +106,9 @@ class BridgedVethCLient(Pollable):
             self.wants_send(False)
         else:
             self.sock.send(eth_frame)
-            #log_eth_frame('ws->veth', eth_frame, logger)
+            # log_eth_frame('ws->veth', eth_frame, logger)
 
     def recv_ready(self):
         eth_frame = self.sock.recv(65535)
         self.ws_client.send(eth_frame)
-        #log_eth_frame('veth->ws', eth_frame, logger)
-        """
-        eth_frame, addr = self.sock.recvfrom(65535)
-
-        # recv_ready(): ('vethvm0', 34525, 2, 1, b'\x00\n\xe7\xbe\xee\xef')
-        logger.info(f'recv_ready(): {addr}')
-        sll_pkttype = struct.unpack('H', addr[4][14:16])[0]  # Extract sll_pkttype from sockaddr_ll
-
-        if sll_pkttype == PACKET_OUTGOING:
-            print("Outgoing packet (sent by this host) dropped")
-        else:
-            self.ws_client.send(eth_frame)
-            log_eth_frame('veth->ws', eth_frame, logger)
-        """
+        # log_eth_frame('veth->ws', eth_frame, logger)

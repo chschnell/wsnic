@@ -11,7 +11,7 @@
 
 import os, logging, struct, fcntl
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str
+from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str
 
 logger = logging.getLogger('tapdev')
 
@@ -22,9 +22,9 @@ IFF_TAP       = 0x0002
 IFF_NO_PI     = 0x1000
 
 class TapDeviceNetworkBackend(NetworkBackend):
-    # - maintains a single, shared TAP file Pollable for all ws_clients
-    # - needs ws_client MAC to forward packets to ws_clients by packet destination MAC address
-    #
+    ## - maintains a single, shared TAP file Pollable for all ws_clients
+    ## - needs ws_client MAC to forward packets to ws_clients by packet destination MAC address
+    ##
     def __init__(self, server):
         super().__init__(server)
         self.eth_iface = server.config.eth_iface
@@ -48,17 +48,17 @@ class TapDeviceNetworkBackend(NetworkBackend):
             self.tap_dev = None
 
     def forward_to_ws_client(self, eth_frame):
-        # called internally by TapDevice.recv_ready() when a new eth_frame has arrived.
-        #
-        # Function:
-        # - [ indirectly through: self.server.relay_to_ws_client(os.read(self.fd, 65535)) ]
-        # - extract destination MAC address from eth_frame
-        # - lookup ws_client by MAC
-        #   if exists:
-        #     forward eth_frame to ws_client with ws_client.send(eth_frame)
-        #   else if LSB is set (broadcast or multicast):
-        #     forward eth_frame to all attached ws_clients
-        #
+        ## called internally by TapDevice.recv_ready() when a new eth_frame has arrived.
+        ##
+        ## Function:
+        ## - [ indirectly through: self.server.relay_to_ws_client(os.read(self.fd, 65535)) ]
+        ## - extract destination MAC address from eth_frame
+        ## - lookup ws_client by MAC
+        ##   if exists:
+        ##     forward eth_frame to ws_client with ws_client.send(eth_frame)
+        ##   else if LSB is set (broadcast or multicast):
+        ##     forward eth_frame to all attached ws_clients
+        ##
         dst_mac = eth_frame[ : 6 ]
         dst_ws_client = self.mac_to_client.get(dst_mac, None)
         if dst_ws_client:
@@ -71,19 +71,19 @@ class TapDeviceNetworkBackend(NetworkBackend):
             logger.debug(f'dropped packet to ws:{mac2str(dst_mac)}')
 
     def forward_from_ws_client(self, ws_client, eth_frame):
-        # called by WebSocketClient.recv() when a new eth_frame has arrived.
-        #
-        # Implementation:
-        # - extract destination and source MAC addresses from eth_frame
-        # - if no MAC has yet been assigned:
-        #     call self.set_client_mac()
-        # - if destination MAC is broad- or multicast:
-        #     forward eth_frame to TAP and all ws_clients except self
-        # - elif destination MAC has known ws_client:
-        #     forward eth_frame to ws_client only
-        # - else:
-        #     forward eth_frame to TAP only
-        #
+        ## called by WebSocketClient.recv() when a new eth_frame has arrived.
+        ##
+        ## Implementation:
+        ## - extract destination and source MAC addresses from eth_frame
+        ## - if no MAC has yet been assigned:
+        ##     call self.set_client_mac()
+        ## - if destination MAC is broad- or multicast:
+        ##     forward eth_frame to TAP and all ws_clients except self
+        ## - elif destination MAC has known ws_client:
+        ##     forward eth_frame to ws_client only
+        ## - else:
+        ##     forward eth_frame to TAP only
+        ##
         if not ws_client in self.ws_clients:
             return
         dst_mac, src_mac = struct.unpack_from('6s6s', eth_frame)
@@ -111,12 +111,10 @@ class TapDevice(Pollable):
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface,
-            '-j', 'MASQUERADE'], logger, check=do_install)
-        run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.tap_iface,
-            '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], logger, check=do_install)
-        run(['iptables', cmd, 'FORWARD', '-i', self.tap_iface, '-o', self.eth_iface,
-            '-j', 'ACCEPT'], logger, check=do_install)
+        run = Exec(logger, check=do_install)
+        run(f'iptables {cmd} POSTROUTING -t nat -o {self.eth_iface} -j MASQUERADE')
+        run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.tap_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
+        run(f'iptables {cmd} FORWARD -i {self.tap_iface} -o {self.eth_iface} -j ACCEPT')
 
     def open(self):
         ## open TAP clone device
@@ -130,10 +128,11 @@ class TapDevice(Pollable):
         self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## set TAP device IP address/netmask/MTU and bring it up
-        run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+', 'dev', self.tap_iface], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'mtu', str(self.config.dhcp_mtu)], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
+        run = Exec(logger, check=True)
+        run(f'ip addr add {self.config.server_addr}/{self.config.netmask} brd + dev {self.tap_iface}')
+        run(f'ip link set dev {self.tap_iface} mtu {self.config.dhcp_mtu}')
+        run(f'ip link set dev {self.tap_iface} promisc on')
+        run(f'ip link set dev {self.tap_iface} up')
 
         ## setup NAT rules for TAP device
         self._install_nat_rules(True)

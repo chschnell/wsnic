@@ -5,7 +5,7 @@
 
 import os, logging, struct, fcntl
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str, random_private_mac
+from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str, random_private_mac
 
 logger = logging.getLogger('brtap')
 
@@ -16,8 +16,8 @@ IFF_TAP       = 0x0002
 IFF_NO_PI     = 0x1000
 
 class BridgedTapNetworkBackend(NetworkBackend):
-    # - maintains one TAP device per ws_client
-    #
+    ## - maintains one TAP device per ws_client
+    ##
     def __init__(self, server):
         super().__init__(server)
         self.br_iface = 'wsbr0'
@@ -28,28 +28,26 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
-        run(['iptables', cmd, 'POSTROUTING', '-t', 'nat', '-o', self.eth_iface, '-j',
-            'MASQUERADE'], logger, check=do_install)
+        run = Exec(logger, check=do_install)
+        run(f'iptables {cmd} POSTROUTING -t nat -o {self.eth_iface} -j MASQUERADE')
         if self.restrict_inbound:
-            run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.br_iface,
-                '-m', 'state', '--state', 'RELATED,ESTABLISHED', '-j', 'ACCEPT'], logger, check=do_install)
+            run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
         else:
-            run(['iptables', cmd, 'FORWARD', '-i', self.eth_iface, '-o', self.br_iface,
-                '-j', 'ACCEPT'], logger, check=do_install)
-        run(['iptables', cmd, 'FORWARD', '-i', self.br_iface, '-o', self.eth_iface, '-j', 'ACCEPT'],
-            logger, check=do_install)
+            run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -j ACCEPT')
+        run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.eth_iface} -j ACCEPT')
 
     def open(self):
         if self.is_opened:
             return
         self.is_opened = True
         ## create bridge
-        run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge'], logger, check=True)
-        run(['ip', 'link', 'set', self.br_iface, 'address', mac2str(random_private_mac())], logger, check=True)
-        run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+',
-            'dev', self.br_iface], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.br_iface, 'promisc', 'on'], logger, check=True)
-        run(['ip', 'link', 'set', self.br_iface, 'up'], logger, check=True)
+        run = Exec(logger, check=True)
+        run(f'ip link add dev {self.br_iface} type bridge')
+        run(f'ip link set dev {self.br_iface} address {mac2str(random_private_mac())}')
+        run(f'ip addr add dev {self.br_iface} {self.config.server_addr}/{self.config.netmask} brd +')
+        run(f'ip link set dev {self.br_iface} promisc on')
+        run(f'ip link set dev {self.br_iface} up')
+
         ## setup bridge NAT rules
         self._install_nat_rules(True)
         logger.info(f'created bridge {self.br_iface}')
@@ -65,7 +63,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
             self.dhcp_server.close()
             self.dhcp_server = None
         self._install_nat_rules(False)
-        run(['ip', 'link', 'del', self.br_iface], logger)
+        Exec(logger)(f'ip link del {self.br_iface}')
         logger.info(f'destroyed bridge {self.br_iface}')
         self.is_opened = False
 
@@ -107,9 +105,10 @@ class BridgedTapDevice(Pollable):
         self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## attach TAP device to bridge and bring it up
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
+        run = Exec(logger, check=True)
+        run(f'ip link set dev {self.tap_iface} master {self.br_iface}')
+        run(f'ip link set dev {self.tap_iface} promisc on')
+        run(f'ip link set dev {self.tap_iface} up')
 
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
