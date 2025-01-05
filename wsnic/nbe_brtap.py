@@ -48,6 +48,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         run(['ip', 'link', 'set', self.br_iface, 'address', mac2str(random_private_mac())], logger, check=True)
         run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+',
             'dev', self.br_iface], logger, check=True)
+        run(['ip', 'link', 'set', 'dev', self.br_iface, 'promisc', 'on'], logger, check=True)
         run(['ip', 'link', 'set', self.br_iface, 'up'], logger, check=True)
         ## setup bridge NAT rules
         self._install_nat_rules(True)
@@ -100,14 +101,14 @@ class BridgedTapDevice(Pollable):
         super().open(self.fd)
         os.set_blocking(self.fd, False)
 
-        ## create TAP device
+        ## create TAP device file, file gets deleted when self.fd is closed
         ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
         self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## attach TAP device to bridge and bring it up
-        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
 
         logger.info(f'created bridged TAP device {self.tap_iface}')
