@@ -97,7 +97,7 @@ class TapDeviceNetworkBackend(NetworkBackend):
         dst_mac, src_mac = struct.unpack_from('6s6s', eth_frame)
         if not ws_client.mac_addr:
             self.set_client_mac(ws_client, src_mac)
-            logger.info(f'{ws_client.addr}: registered MAC address {mac2str(src_mac)}')
+            logger.info(f'{ws_client.addr} is using MAC address {mac2str(src_mac)}')
         if dst_mac[0] & 0x1:
             for ws_client_i in self.mac_to_client.values():
                 if ws_client_i != ws_client:
