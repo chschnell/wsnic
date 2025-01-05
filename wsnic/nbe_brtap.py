@@ -9,13 +9,11 @@ from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str, random_pri
 
 logger = logging.getLogger('brtap')
 
-TAP_CLONE_DEVICE = '/dev/net/tun'
-
-TUNSETIFF = 0x400454ca
-
-IFF_UP    = 0x1
-IFF_TAP   = 0x0002
-IFF_NO_PI = 0x1000
+TAP_CLONE_DEV = '/dev/net/tun'
+TUNSETIFF     = 0x400454ca
+IFF_UP        = 0x1
+IFF_TAP       = 0x0002
+IFF_NO_PI     = 0x1000
 
 class BridgedTapNetworkBackend(NetworkBackend):
     # - maintains one TAP device per ws_client
@@ -98,7 +96,7 @@ class BridgedTapDevice(Pollable):
 
     def open(self):
         ## open TAP clone device
-        self.fd = os.open(TAP_CLONE_DEVICE, os.O_RDWR | os.O_NONBLOCK)
+        self.fd = os.open(TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
         super().open(self.fd)
         os.set_blocking(self.fd, False)
 
@@ -108,8 +106,10 @@ class BridgedTapDevice(Pollable):
         self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## attach TAP device to bridge and bring it up
+        run(['ip', 'link', 'set', 'dev', self.tap_iface, 'promisc', 'on'], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
+
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
     def close(self):
