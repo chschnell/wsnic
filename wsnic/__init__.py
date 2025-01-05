@@ -18,20 +18,20 @@ def mac2str(mac):
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
 
 def random_private_mac():
-    ## Private MAC addresses can be identified by having the
-    ## second-least-significant bit of the most significant byte set. And
-    ## as unicast addresses, they must not have the least significant bit
-    ## set. That means any addres matching any pattern below is private:
+    ## Return a random private 48-bit MAC address.
+    ## The most significant byte of any valid private MAC address for a NIC
+    ## has bit 0 (LSB) set to 0 (unicast address) and bit 1 set to 1 (local
+    ## address).
+    ##   bit 0: 0=unicast 1=multicast
+    ##   bit 1: 0=globally-unique 1=locally-administered
+    ## Thus any address matching any pattern below is private:
     ##   x2:xx:xx:xx:xx:xx
     ##   x6:xx:xx:xx:xx:xx
     ##   xA:xx:xx:xx:xx:xx
     ##   xE:xx:xx:xx:xx:xx
-    ## Source:
-    ##   https://www.blackmanticore.com/fc5c95c7c2e29e262ec89c539852f8fb
-    ##   https://superuser.com/a/907834
     mac_addr = bytearray(random.randbytes(6))
     mac_addr[0] = (mac_addr[0] & ~0x01) | 0x02
-    return mac_addr
+    return mac_addr.bytes()
 
 ETH_TYPES = {
     0x0800: 'IPv4',
@@ -56,6 +56,9 @@ def log_eth_frame(tag, eth_frame, logger):
     logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
 
 class Pollable:
+    ## Base class that wraps an open file descriptor fd for epoll()
+    ## fd can be any file type supported by epoll(), for example socket filenos or TAP files.
+
     def __init__(self, server, epoll_flags=EPOLLIN):
         self.server = server
         self.config = server.config
@@ -65,9 +68,11 @@ class Pollable:
         self.fd = None
 
     def wants_recv(self, do_recv):
+        ## add/remove self.fd to/from epoll's observed set of input-fds
         self._wants_flag(do_recv, EPOLLIN)
 
     def wants_send(self, do_send):
+        ## add/remove self.fd to/from epoll's observed set of output-fds
         self._wants_flag(do_send, EPOLLOUT)
 
     def _wants_flag(self, wants_flag, flag):
@@ -89,15 +94,18 @@ class Pollable:
             self.fd = None
 
     def send_ready(self):
+        ## called when wants_send is True and self.fd is clear to send
         pass
 
     def recv_ready(self):
+        ## called when wants_recv is True and self.fd has data available
         pass
 
     def send(self, eth_frame):
         pass
 
     def refresh(self, tm_now):
+        ## called in periodic intervals
         pass
 
 class FrameQueue:
