@@ -3,7 +3,7 @@
 ## Shared package classes.
 ##
 
-import logging, subprocess, struct
+import logging, random, subprocess, struct
 
 from select import EPOLLIN, EPOLLOUT
 from collections import deque
@@ -16,6 +16,22 @@ def run(cmd_line, logger, check=False):
 def mac2str(mac):
     mac = mac.hex()
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
+
+def random_private_mac():
+    ## Private MAC addresses can be identified by having the
+    ## second-least-significant bit of the most significant byte set. And
+    ## as unicast addresses, they must not have the least significant bit
+    ## set. That means any addres matching any pattern below is private:
+    ##   x2:xx:xx:xx:xx:xx
+    ##   x6:xx:xx:xx:xx:xx
+    ##   xA:xx:xx:xx:xx:xx
+    ##   xE:xx:xx:xx:xx:xx
+    ## Source:
+    ##   https://www.blackmanticore.com/fc5c95c7c2e29e262ec89c539852f8fb
+    ##   https://superuser.com/a/907834
+    mac_addr = bytearray(random.randbytes(6))
+    mac_addr[0] = (mac_addr[0] & ~0x01) | 0x02
+    return mac_addr
 
 ETH_TYPES = {
     0x0800: 'IPv4',
@@ -111,6 +127,8 @@ class FrameQueue:
             self.curr_consumed += n_bytes
             if self.curr_consumed >= len(self.curr_frame):
                 self.curr_frame = None
+            else:
+                print(f'*** fragmented frame, sent {n_bytes} but wanted {len(self.curr_frame)}')
 
 class NetworkBackend:
     def __init__(self, server):
