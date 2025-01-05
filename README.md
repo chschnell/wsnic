@@ -110,15 +110,22 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
 
 You can add multiple alternate DNS names and IP addresses, use comma `,` to separate them.
 
+After creating your certificate add it to your `wsnic.conf` using:
+
+```
+wss_server_cert=/var/local/crt/cert.crt
+wss_server_key=/var/local/crt/cert.key
+```
+
 #### Step 2/2: Setup browser to accept the self-signed certificate
 
-By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser once by pointing it at your wsnic server using a HTTPS URL:
+By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser. Start wsnic and point your browser at your wsnic server using a HTTPS URL like:
 
 ```
 https://wsnic.example.com:8071
 ```
 
-You will get a security warning that you need to acknowledge once. After that you should see a reply page from wsnic's WebSocket server that reads:
+You will get a security warning that you need to acknowledge once to grant permission permanently. After that you should see a reply page from wsnic's WebSocket server that reads:
 
 ```
 Failed to open a WebSocket connection: invalid Connection header: keep-alive.
@@ -142,3 +149,9 @@ sudo systemctl disable dnsmasq
 By default, the debian installer configures the dnsmasq systemd service to be started during boot time, and it also starts the service at the end of the installation procedure.
 
 To generally avoid conflicts no other DHCP server should be running on the same host as wsnic, the `systemctl stop` and `disable` commands make sure that dnsmasq is not running before wsnic is started.
+
+After installing dnsmasq enable it in your `wsnic.conf` using:
+
+```
+dhcp_service=dnsmasq
+```
