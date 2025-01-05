@@ -5,27 +5,20 @@
 
 import os, logging, struct, fcntl
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str
+from wsnic import Pollable, NetworkBackend, FrameQueue, run, mac2str, random_private_mac
 
 logger = logging.getLogger('brtap')
 
 TAP_CLONE_DEVICE = '/dev/net/tun'
 
-TUNSETIFF      = 0x400454ca
-"""
-SIOCGIFFLAGS   = 0x00008913
-SIOCSIFFLAGS   = 0x00008914
-SIOCSIFADDR    = 0x00008916
-SIOCSIFNETMASK = 0x0000891C
-"""
+TUNSETIFF = 0x400454ca
 
 IFF_UP    = 0x1
 IFF_TAP   = 0x0002
 IFF_NO_PI = 0x1000
 
 class BridgedTapNetworkBackend(NetworkBackend):
-    # - maintains one TAP device per ws_clients
-    # - needs ws_client MAC for packet filtering -- TODO: does it?
+    # - maintains one TAP device per ws_client
     #
     def __init__(self, server):
         super().__init__(server)
@@ -53,11 +46,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
             return
         self.is_opened = True
         ## create bridge
-        """
         run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge'], logger, check=True)
-        """
-        run(['ip', 'link', 'add', self.br_iface, 'type', 'bridge', 'stp_state', '0'], logger, check=True)
-        run(['ip', 'link', 'set', self.br_iface, 'address', '00:0a:e7:be:ee:ef'], logger, check=True)
+        run(['ip', 'link', 'set', self.br_iface, 'address', mac2str(random_private_mac())], logger, check=True)
         run(['ip', 'addr', 'add', f'{self.config.server_addr}/{self.config.netmask}', 'brd', '+',
             'dev', self.br_iface], logger, check=True)
         run(['ip', 'link', 'set', self.br_iface, 'up'], logger, check=True)
@@ -101,10 +91,10 @@ class BridgedTapNetworkBackend(NetworkBackend):
 class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
         super().__init__(server)
-        self.ws_client = ws_client              ## WebSocketClient, the ws_client associated to this TAP device
-        self.out = FrameQueue()                 ## frames waiting to be send to the TAP device
-        self.br_iface = server.netbe.br_iface   ## the bridge's interface name, for example 'wsnicbr0'
-        self.tap_iface = None                   ## string, TAP device name (for example: wsnic0)
+        self.ws_client = ws_client            ## WebSocketClient, the ws_client associated to this TAP device
+        self.out = FrameQueue()               ## frames waiting to be send to the TAP device
+        self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsnicbr0'
+        self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def open(self):
         ## open TAP clone device
@@ -113,13 +103,12 @@ class BridgedTapDevice(Pollable):
         os.set_blocking(self.fd, False)
 
         ## create TAP device
-        ifreq = struct.pack('16sH', 'wsnic%d'.encode(), IFF_TAP | IFF_NO_PI)
+        ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
         self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## attach TAP device to bridge and bring it up
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'master', self.br_iface], logger, check=True)
-        #run(['ip', 'addr', 'add', '192.168.2.2/24', 'dev', self.tap_iface], logger, check=True)
         run(['ip', 'link', 'set', 'dev', self.tap_iface, 'up'], logger, check=True)
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
