@@ -43,7 +43,7 @@ class BridgedVethCLient(Pollable):
         super().__init__(server)
         self.ws_client = ws_client            ## WebSocketClient, the associated ws_client
         self.out = FrameQueue()               ## frames waiting to be send
-        self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsnicbr0'
+        self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsbr0'
         self.veth_br_iface = None             ## the bridge-side of the veth pair, for example vethbr0
         self.veth_vm_iface = None             ## the vm-side of the veth pair, for example vethvm0
         self.sock = None                      ## our local packet socket

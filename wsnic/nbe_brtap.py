@@ -22,7 +22,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
     #
     def __init__(self, server):
         super().__init__(server)
-        self.br_iface = 'wsnicbr0'
+        self.br_iface = 'wsbr0'
         self.eth_iface = self.config.eth_iface
         self.dhcp_server = None
         self.is_opened = False
@@ -93,7 +93,7 @@ class BridgedTapDevice(Pollable):
         super().__init__(server)
         self.ws_client = ws_client            ## WebSocketClient, the ws_client associated to this TAP device
         self.out = FrameQueue()               ## frames waiting to be send to the TAP device
-        self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsnicbr0'
+        self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsbr0'
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def open(self):
