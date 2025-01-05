@@ -14,10 +14,10 @@ Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop
 
 #### Step 1/3: Install required linux tools
 
-First, make sure that the binaries required by wsnic (`ip`, `iptables` and optionally `stunnel`) are installed, for Debian:
+First, make sure that the packages required by wsnic are installed, for Debian:
 
 ```bash
-sudo apt install iproute2 iptables stunnel
+sudo apt install python3.11-venv iproute2 iptables stunnel
 ```
 
 stunnel is only required for `wss://` support and otherwise not needed.
