@@ -21,7 +21,7 @@ class DnsmasqDhcpServer:
         dhcp_ip_hi = self.config.host_addrs[-1]
         dhcp_dns = ','.join(self.config.dhcp_domain_name_server)
         dnsmasq_cmdline = [
-            'dnsmasq', '--keep-in-foreground', '--no-hosts', '--no-resolv', '--no-ping', f'--interface={iface}',
+            'dnsmasq', '--keep-in-foreground', '--no-ping', f'--interface={iface}',   # '--no-resolv', '--no-hosts', 
             '--except-interface=lo', f'--listen-address={self.config.server_addr}', '--bind-interfaces',
             f'--dhcp-range={dhcp_ip_lo},{dhcp_ip_hi},{self.config.netmask},{self.config.dhcp_lease_time}s',
             f'--dhcp-option=6,{dhcp_dns}', f'--dhcp-option=26,{self.config.dhcp_mtu}'
