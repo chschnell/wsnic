@@ -69,9 +69,9 @@ class BridgedVethCLient(Pollable):
         run(f'ip link add dev {self.veth_br_iface} type veth peer name {self.veth_vm_iface}')
         run(f'ip link set dev {self.veth_br_iface} master {self.br_iface}')
         run(f'ip link set dev {self.veth_br_iface} mtu {self.config.dhcp_mtu}')
-        run(f'ip link set dev {self.veth_br_iface} promisc on')
+        #run(f'ip link set dev {self.veth_br_iface} promisc on')
         run(f'ip link set dev {self.veth_vm_iface} mtu {self.config.dhcp_mtu}')
-        run(f'ip link set dev {self.veth_vm_iface} promisc on')
+        #run(f'ip link set dev {self.veth_vm_iface} promisc on')
 
         ## bring both ends of the veth pair up
         run(f'ip link set dev {self.veth_br_iface} up')

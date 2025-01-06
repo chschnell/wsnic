@@ -43,9 +43,10 @@ class BridgedTapNetworkBackend(NetworkBackend):
         ## create bridge
         run = Exec(logger, check=True)
         run(f'ip link add dev {self.br_iface} type bridge')
+        #run(f'sysctl net.ipv6.conf.{self.br_iface}.disable_ipv6=1')
         run(f'ip link set dev {self.br_iface} address {mac2str(random_private_mac())}')
         run(f'ip addr add dev {self.br_iface} {self.config.server_addr}/{self.config.netmask} brd +')
-        run(f'ip link set dev {self.br_iface} promisc on')
+        #run(f'ip link set dev {self.br_iface} promisc on')
         run(f'ip link set dev {self.br_iface} up')
 
         ## setup bridge NAT rules
@@ -106,8 +107,9 @@ class BridgedTapDevice(Pollable):
 
         ## attach TAP device to bridge and bring it up
         run = Exec(logger, check=True)
+        #run(f'sysctl net.ipv6.conf.{self.tap_iface}.disable_ipv6=1')
         run(f'ip link set dev {self.tap_iface} master {self.br_iface}')
-        run(f'ip link set dev {self.tap_iface} promisc on')
+        #run(f'ip link set dev {self.tap_iface} promisc on')
         run(f'ip link set dev {self.tap_iface} up')
 
         logger.info(f'created bridged TAP device {self.tap_iface}')
