@@ -12,6 +12,7 @@ from wsnic.dnsmasq import DnsmasqDhcpServer
 from wsnic.nbe_tapdev import TapDeviceNetworkBackend
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 from wsnic.nbe_pktsock import PacketSocketNetworkBackend
+from wsnic.nbe_macvtap import MacvtapNetworkBackend
 from wsnic.nbe_brveth import BridgedVethNetworkBackend
 
 logger = logging.getLogger('main')
@@ -160,7 +161,7 @@ class WsnicServer:
 def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to virtual network device proxy server.')
     parser.add_argument('-n', help='use network backend NETBE (tapdev or brtap; default: tapdev)',
-        choices=['tapdev', 'brtap', 'brveth', 'pktsock'], default='tapdev', dest='netbe', metavar='NETBE')
+        choices=['tapdev', 'brtap', 'brveth', 'pktsock', 'macvtap'], default='tapdev', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
@@ -185,6 +186,8 @@ def main():
         netbe_class = BridgedVethNetworkBackend
     elif args.netbe == 'pktsock':
         netbe_class = PacketSocketNetworkBackend
+    elif args.netbe == 'macvtap':
+        netbe_class = MacvtapNetworkBackend
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
