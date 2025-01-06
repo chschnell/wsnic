@@ -44,9 +44,7 @@ IP_PROTOS = {
 
 def log_eth_frame(tag, eth_frame, logger):
     dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
-    eth_type = ETH_TYPES.get(eth_type, None)
-    if eth_type is None:
-        eth_type = hex(eth_type)
+    eth_type = ETH_TYPES.get(eth_type, hex(eth_type))
     ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
     logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
 
