@@ -3,10 +3,16 @@
 ## IPv4 DHCP server.
 ##
 ## Links:
-## - https://www.rfc-editor.org/rfc/rfc2132.html
-## - https://www.iana.org/assignments/bootp-dhcp-parameters/bootp-dhcp-parameters.xhtml
-## - https://github.com/russdill/lwip-udhcpd/blob/master/udhcp_common.c
-## - https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol
+## - Wikipedia: Dynamic Host Configuration Protocol
+##   https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol
+## - RFC2132: DHCP Options and BOOTP Vendor Extensions
+##   https://www.rfc-editor.org/rfc/rfc2132.html
+## - Dynamic Host Configuration Protocol (DHCP) and Bootstrap Protocol (BOOTP) Parameters
+##   https://www.iana.org/assignments/bootp-dhcp-parameters/bootp-dhcp-parameters.xhtml
+## - lwip-udhcpd/udhcp_common.c
+##   https://github.com/russdill/lwip-udhcpd/blob/master/udhcp_common.c
+## - Python DHCP Relay
+##   https://github.com/mirceaulinic/py-dhcp-relay
 
 import logging, struct, socket, functools, enum, time
 from collections import namedtuple
