@@ -32,6 +32,8 @@ ETH_TYPES = {
     0x0800: 'IPv4',
     0x86DD: 'IPv6',
     0x0806: 'ARP',
+    0x88E1: 'HPlug',    ## HomePlug Specification AV MME
+    0x8912: 'HPlug-M'   ## Ethertype used for mediaxtream Specification protocols
 }
 
 IP_PROTOS = {
