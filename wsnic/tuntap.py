@@ -22,7 +22,7 @@ IFF_TAP       = 0x0002
 IFF_NO_PI     = 0x1000
 
 def open_tap(tap_ifname, tap_clone_dev=None):
-    ## Open or create a TAP device and return the tuple (int fd, str ifname).
+    ## Open or create a TAP device and return the tuple (fd, ifname).
     ##
     ## Arguments
     ## - str tap_ifname
@@ -33,17 +33,19 @@ def open_tap(tap_ifname, tap_clone_dev=None):
     ##     TAP clone device file path, dynamically created (for example by
     ##     macvtap) or '/dev/net/tun' (which is used by default).
     ##
-    ## The returned interface name "ifname" is either the same as tap_ifname
-    ## or the ifname of the created TAP device.
+    ## Return values
+    ## - int fd
+    ##     The TAP device's open, non-blocking file descriptor.
+    ## - str ifname
+    ##     Either the same as tap_ifname or the created TAP device's ifname.
     ##
-    ## The caller should close the returned file descriptor "fd" by using
-    ## os.close(fd) when it is no longer used. If the TAP device was created
-    ## by this function it gets automatically deleted when fd is closed.
+    ## Close fd by using os.close(fd) when it is no longer used. If the TAP
+    ## device was created by this function it gets automatically deleted
+    ## when fd is closed.
     ##
     ## Use os.read(fd) and os.write(fd) to exchange ethernet frames with the
     ## TAP device.
 
-    ## open TAP clone device
     tap_fd = os.open(tap_clone_dev if tap_clone_dev else TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
     try:
         os.set_blocking(tap_fd, False)
