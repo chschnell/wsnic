@@ -52,6 +52,7 @@ class MacvtapDevice(Pollable):
         run = Exec(logger, check=True)
         #run(f'ip link add link {self.config.eth_iface} name {self.macvtap_iface} type macvtap')
         run(f'ip link add link {self.config.eth_iface} name {self.macvtap_iface} type macvtap mode bridge')
+        #run(f'ip link add link {self.config.eth_iface} name {self.macvtap_iface} type macvtap mode vepa')
         run(f'ip link set dev {self.macvtap_iface} address {mac2str(self.ws_client.mac_addr)}')
         run(f'ip link set dev {self.macvtap_iface} promisc on')
         run(f'ip link set dev {self.macvtap_iface} up')
@@ -60,7 +61,7 @@ class MacvtapDevice(Pollable):
         with open(f'/sys/class/net/{self.macvtap_iface}/ifindex') as f_in:
             tap_clone_dev = f'/dev/tap{int(f_in.read())}'
 
-        logger.info(f'opening mavtap device {self.macvtap_iface} using TAP clone device {tap_clone_dev}')
+        logger.info(f'opening macvtap device {self.macvtap_iface} using TAP clone device {tap_clone_dev}')
         self.fd, tap_iface = open_tap(self.macvtap_iface, tap_clone_dev)
         super().open(self.fd)
 
@@ -71,7 +72,7 @@ class MacvtapDevice(Pollable):
             os.close(fd)
         if self.macvtap_iface is not None:
             Exec(logger)(f'ip link del {self.macvtap_iface}')
-            logger.info(f'destroyed mavtap device {self.macvtap_iface}')
+            logger.info(f'destroyed macvtap device {self.macvtap_iface}')
             self.macvtap_iface = None
 
     def send(self, eth_frame):
