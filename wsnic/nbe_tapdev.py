@@ -114,6 +114,8 @@ class TapDevice(Pollable):
         run = Exec(logger, check=do_install)
         run(f'iptables {cmd} POSTROUTING -t nat -o {self.eth_iface} -j MASQUERADE')
         run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.tap_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
+
+        run(f'iptables {cmd} FORWARD -i {self.tap_iface} -o {self.eth_iface} -d {self.config.subnet} -j DROP')
         run(f'iptables {cmd} FORWARD -i {self.tap_iface} -o {self.eth_iface} -j ACCEPT')
 
     def open(self):
@@ -132,7 +134,7 @@ class TapDevice(Pollable):
         #run(f'sysctl net.ipv6.conf.{self.tap_iface}.disable_ipv6=1')
         run(f'ip addr add dev {self.tap_iface} {self.config.server_addr}/{self.config.netmask} brd +')
         run(f'ip link set dev {self.tap_iface} mtu {self.config.dhcp_mtu}')
-        #run(f'ip link set dev {self.tap_iface} promisc on')
+        run(f'ip link set dev {self.tap_iface} promisc on')
         run(f'ip link set dev {self.tap_iface} up')
 
         ## setup NAT rules for TAP device

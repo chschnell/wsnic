@@ -34,6 +34,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
             run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
         else:
             run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -j ACCEPT')
+
+        run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.eth_iface} -d {self.config.subnet} -j DROP')
         run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.eth_iface} -j ACCEPT')
 
     def open(self):
