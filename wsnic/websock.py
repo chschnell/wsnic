@@ -12,7 +12,7 @@ from websockets.protocol import State
 from websockets.http11 import Request
 from websockets.frames import Frame, Opcode
 
-from wsnic import Pollable, FrameQueue, mac2str
+from wsnic import Pollable, FrameQueue
 
 logger = logging.getLogger('websock')
 
