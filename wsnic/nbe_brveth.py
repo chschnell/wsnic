@@ -5,7 +5,7 @@
 
 import os, logging, struct, fcntl, socket
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str, log_eth_frame
+from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str, log_eth_frame
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
 logger = logging.getLogger('nbe_brveth')
