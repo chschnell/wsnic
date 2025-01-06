@@ -157,6 +157,7 @@ class WebSocketClient(Pollable):
                     self.out.append(data)
                 elif self.out.is_empty():
                     self.close()
+                    return
                 else:
                     self.closing = True
             if was_empty:
