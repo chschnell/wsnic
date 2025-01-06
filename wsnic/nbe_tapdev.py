@@ -2,24 +2,13 @@
 ## nbe_tapdev.py
 ## Network backend: Single, multiplexed Linux TAP device.
 ##
-## Links:
-## - https://github.com/rlisagor/pynetlinux/blob/master/pynetlinux/ifconfig.py
-## - https://backreference.org/2010/03/26/tuntap-interface-tutorial/index.html
-## - https://man7.org/linux/man-pages/man7/netdevice.7.html
-## - https://github.com/mirceaulinic/py-dhcp-relay
-## - https://gist.github.com/firaxis/0e538c8e5f81eaa55748acc5e679a36e
 
-import os, logging, struct, fcntl
+import os, logging, struct
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str
+from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str
+from wsnic.tuntap import open_tap
 
 logger = logging.getLogger('tapdev')
-
-TAP_CLONE_DEV = '/dev/net/tun'
-TUNSETIFF     = 0x400454ca
-IFF_UP        = 0x1
-IFF_TAP       = 0x0002
-IFF_NO_PI     = 0x1000
 
 class TapDeviceNetworkBackend(NetworkBackend):
     ## - maintains a single, shared TAP file Pollable for all ws_clients
@@ -114,20 +103,13 @@ class TapDevice(Pollable):
         run = Exec(logger, check=do_install)
         run(f'iptables {cmd} POSTROUTING -t nat -o {self.eth_iface} -j MASQUERADE')
         run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.tap_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
-
         run(f'iptables {cmd} FORWARD -i {self.tap_iface} -o {self.eth_iface} -d {self.config.subnet} -j DROP')
         run(f'iptables {cmd} FORWARD -i {self.tap_iface} -o {self.eth_iface} -j ACCEPT')
 
     def open(self):
-        ## open TAP clone device
-        self.fd = os.open(TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
-        super().open(self.fd)
-        os.set_blocking(self.fd, False)
-
         ## create TAP device file, file gets deleted when self.fd is closed
-        ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
-        tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
-        self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
+        self.fd, self.tap_iface = open_tap('wstap%d')
+        super().open(self.fd)
 
         ## set TAP device IP address/netmask/MTU and bring it up
         run = Exec(logger, check=True)

@@ -3,17 +3,12 @@
 ## Network backend: Network bridge with one Linux TAP device per WebSocket client.
 ##
 
-import os, logging, struct, fcntl
+import os, logging
 
-from wsnic import Pollable, NetworkBackend, FrameQueue, Exec, mac2str, random_private_mac
+from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str, random_private_mac
+from wsnic.tuntap import open_tap
 
 logger = logging.getLogger('brtap')
-
-TAP_CLONE_DEV = '/dev/net/tun'
-TUNSETIFF     = 0x400454ca
-IFF_UP        = 0x1
-IFF_TAP       = 0x0002
-IFF_NO_PI     = 0x1000
 
 class BridgedTapNetworkBackend(NetworkBackend):
     ## - maintains one TAP device per ws_client
@@ -97,15 +92,8 @@ class BridgedTapDevice(Pollable):
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def open(self):
-        ## open TAP clone device
-        self.fd = os.open(TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
+        self.fd, self.tap_iface = open_tap('wstap%d')
         super().open(self.fd)
-        os.set_blocking(self.fd, False)
-
-        ## create TAP device file, file gets deleted when self.fd is closed
-        ifreq = struct.pack('16sH', 'wstap%d'.encode(), IFF_TAP | IFF_NO_PI)
-        tunsetiff_result = fcntl.ioctl(self.fd, TUNSETIFF, ifreq)
-        self.tap_iface = tunsetiff_result[:16].rstrip(b'\0').decode()
 
         ## attach TAP device to bridge and bring it up
         run = Exec(logger, check=True)
