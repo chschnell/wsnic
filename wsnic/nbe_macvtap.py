@@ -87,10 +87,10 @@ class MacvtapDevice(Pollable):
         if eth_frame is None:
             self.wants_send(False)
         else:
-            log_eth_frame('ws->tap', eth_frame, logger)
+            #log_eth_frame('ws->tap', eth_frame, logger)
             os.write(self.fd, eth_frame)
 
     def recv_ready(self):
         eth_frame = os.read(self.fd, 65535)
-        log_eth_frame('tap->ws', eth_frame, logger)
+        #log_eth_frame('tap->ws', eth_frame, logger)
         self.ws_client.send(eth_frame)
