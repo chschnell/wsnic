@@ -5,6 +5,7 @@
 
 import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
 
+from wsnic import Exec
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.dhcp import DhcpServer
@@ -108,11 +109,18 @@ class WsnicServer:
             return DhcpServer(self)
 
     def run(self):
+        """
         if os.path.isfile('/proc/sys/net/ipv4/ip_forward'):
             with open('/proc/sys/net/ipv4/ip_forward', 'w') as f_out:
                 f_out.write('1\n')
         else:
             Exec(logger, check=True)('sysctl -w net.ipv4.ip_forward=1')
+        """
+        # https://wiki.archlinux.org/title/Internet_sharing
+        prun = Exec(logger, check=True)
+        prun('sysctl -w net.ipv4.ip_forward=1')
+        prun('sysctl -w net.ipv4.conf.all.forwarding=1')
+        #prun('sysctl -w net.ipv6.conf.all.forwarding=1')
 
         self.netbe = self.netbe_class(self)
         self.netbe.open()
