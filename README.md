@@ -17,7 +17,7 @@ Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop
 First, make sure that the packages required by wsnic are installed, for Debian:
 
 ```bash
-sudo apt install python3.11-venv iproute2 iptables stunnel
+sudo apt install python3-venv iproute2 iptables stunnel
 ```
 
 stunnel is only required for `wss://` support and otherwise not needed.
@@ -76,7 +76,7 @@ WebSockets Secure (`wss://`) support is optional and only enabled if a TLS serve
 1. a DNS record for the hostname of your wsnic server
 2. a TLS server certificate issued for that DNS hostname
 
-If your wsnic server has a public DNS record for its hostname you should use a service like [Let’s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
+If your wsnic server has a public DNS record for its hostname you should use a service like [Letâ€™s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
 
 To enable a TLS certificate declare it in `wsnic.conf` using:
 
