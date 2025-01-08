@@ -8,7 +8,7 @@ import os, logging, struct, fcntl, socket
 from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str, log_eth_frame
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
-logger = logging.getLogger('nbe_brveth')
+logger = logging.getLogger('brveth')
 
 SIOCSIFADDR    = 0x00008916
 SIOCSIFNETMASK = 0x0000891C
