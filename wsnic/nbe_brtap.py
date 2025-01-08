@@ -24,7 +24,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
     def _install_nat_rules(self, do_install):
         cmd = '-A' if do_install else '-D'
         run = Exec(logger, check=do_install)
-        run(f'iptables {cmd} POSTROUTING -t nat -o {self.eth_iface} -j MASQUERADE')
+        run(f'iptables {cmd} POSTROUTING -t nat -s {self.config.subnet} -o {self.eth_iface} -j MASQUERADE')
         if self.restrict_inbound:
             run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
         else:
