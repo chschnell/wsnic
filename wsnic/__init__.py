@@ -13,17 +13,36 @@ def mac2str(mac):
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
 
 def random_private_mac():
-    ## Return a random private 48-bit MAC address.
-    ## The most significant byte of any valid private MAC address for a NIC
-    ## has bit 0 (LSB) set to 0 (unicast address) and bit 1 set to 1 (local
-    ## address).
-    ##   bit 0: 0=unicast 1=multicast
-    ##   bit 1: 0=globally-unique 1=locally-administered
-    ## Thus any address matching any pattern below is private:
-    ##   x2:xx:xx:xx:xx:xx
-    ##   x6:xx:xx:xx:xx:xx
-    ##   xA:xx:xx:xx:xx:xx
-    ##   xE:xx:xx:xx:xx:xx
+    ## Return a random private 48-bit unicast MAC address.
+    ##
+    ## The two least significant bits of the most significant byte in MAC
+    ## addresses are reserved:
+    ##
+    ## - bit 1: "0" for unicast and "1" for multicast MACs
+    ## - bit 2: "0" for globally unique and "1" for locally administered MACs
+    ##
+    ## The MAC address of any Network Interface Card (NIC) must be unicast.
+    ## That leaves 2^46 (out of the total of 2^48) MACs for locally
+    ## administered (private) MACs which can be freely assigned to NICs.
+    ##
+    ## Since MACs are usually denoted in hex with the most significant byte
+    ## first, any private MAC must match one of these 4 patterns:
+    ##
+    ##     x2:xx:xx:xx:xx:xx
+    ##     x6:xx:xx:xx:xx:xx
+    ##     xA:xx:xx:xx:xx:xx
+    ##     xE:xx:xx:xx:xx:xx
+    ##
+    ## Looking at the 2nd nibble of the most significant byte in more detail:
+    ##
+    ##       +---- 1: private MAC
+    ##       |+--- 0: unicast MAC
+    ##       ||
+    ##     0010 =  2 = 0x2
+    ##     0110 =  6 = 0x6
+    ##     1010 = 10 = 0xA
+    ##     1110 = 14 = 0xE
+    ##
     mac_addr = bytearray(random.randbytes(6))
     mac_addr[0] = (mac_addr[0] & ~0x01) | 0x02
     return bytes(mac_addr)
