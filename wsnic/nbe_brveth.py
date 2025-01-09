@@ -20,21 +20,33 @@ class BridgedVethNetworkBackend(BridgedTapNetworkBackend):
     def __init__(self, server):
         super().__init__(server)
 
+    def attach_client(self, ws_client):
+        self.ws_clients.add(ws_client)
+
     def forward_from_ws_client(self, ws_client, eth_frame):
         if not ws_client.mac_addr:
             dst_mac, src_mac = struct.unpack_from('6s6s', eth_frame)
             self.set_client_mac(ws_client, src_mac)
             ## ws_client.pkt_sink is an instance of BridgedVethCLient
+            """
             logger.info(f'assigning VM MAC {mac2str(src_mac)} to {ws_client.pkt_sink.veth_vm_iface}')
             ws_client.pkt_sink.set_mac_addr(src_mac)
+            """
+            veth_dev = BridgedVethCLient(self.server, ws_client)
+            veth_dev.open()
+            ws_client.pkt_sink = veth_dev
+            logger.info(f'assigned VM MAC {mac2str(src_mac)} to {ws_client.pkt_sink.veth_vm_iface}')
+
             logger.info(f'{ws_client.addr}: registered MAC address {mac2str(src_mac)}')
         super().forward_from_ws_client(ws_client, eth_frame)
 
+    """
     def dhcp_lease_assigned(self, mac_addr, ip_addr):
         print(f'==> {mac2str(mac_addr)} <-> {ip_addr}')
 
     def _create_pollable(self, ws_client):
         return BridgedVethCLient(self.server, ws_client)
+    """
 
 class BridgedVethCLient(Pollable):
     INSTANCE_COUNTER = 0
@@ -48,6 +60,7 @@ class BridgedVethCLient(Pollable):
         self.veth_vm_iface = None             ## the vm-side of the veth pair, for example vethvm0
         self.sock = None                      ## our local packet socket
 
+    """
     def set_mac_addr(self, mac_addr):
         pass
 
@@ -57,6 +70,7 @@ class BridgedVethCLient(Pollable):
         fcntl.ioctl(self.fd, SIOCSIFADDR, ifreq)
         ifreq = struct.pack('16sH2s4s8s', vm_iface, socket.AF_INET, b'\x00'*2, socket.inet_aton(netmask), b'\x00'*8) 
         fcntl.ioctl(self.fd, SIOCSIFNETMASK, ifreq)
+    """
 
     def open(self):
         ## generate distinct interface names for the veth pair
@@ -68,9 +82,11 @@ class BridgedVethCLient(Pollable):
         run = Exec(logger, check=True)
         run(f'ip link add dev {self.veth_br_iface} type veth peer name {self.veth_vm_iface}')
         run(f'ip link set dev {self.veth_br_iface} master {self.br_iface}')
-        run(f'ip link set dev {self.veth_br_iface} mtu {self.config.dhcp_mtu}')
+        #run(f'ip link set dev {self.veth_br_iface} mtu {self.config.dhcp_mtu}')
         #run(f'ip link set dev {self.veth_br_iface} promisc on')
-        run(f'ip link set dev {self.veth_vm_iface} mtu {self.config.dhcp_mtu}')
+
+        run(f'ip link set dev {self.veth_vm_iface} address {mac2str(self.ws_client.mac_addr)}')
+        #run(f'ip link set dev {self.veth_vm_iface} mtu {self.config.dhcp_mtu}')
         #run(f'ip link set dev {self.veth_vm_iface} promisc on')
 
         ## bring both ends of the veth pair up
