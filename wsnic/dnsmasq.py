@@ -3,7 +3,7 @@
 ## dnsmasq DHCP server.
 ##
 
-import logging, shutil, subprocess
+import logging, os, shutil, tempfile, subprocess
 
 logger = logging.getLogger('dnsmasq')
 
@@ -11,6 +11,7 @@ class DnsmasqDhcpServer:
     def __init__(self, server):
         self.server = server
         self.config = server.config
+        self.lease_file = None
         self.dnsmasq_p = None
 
     def open(self, iface):
@@ -37,6 +38,10 @@ class DnsmasqDhcpServer:
             dnsmasq_cmdline.append(f'--domain={self.config.dhcp_domain_name}')
         if self.config.dhcp_lease_file:
             dnsmasq_cmdline.append(f'--dhcp-leasefile={self.config.dhcp_lease_file}')
+        else:
+            self.lease_file = tempfile.NamedTemporaryFile(delete=False)
+            self.lease_file.close()
+            dnsmasq_cmdline.append(f'--dhcp-leasefile={self.lease_file.name}')
 
         logger.info(f'start child process: {" ".join(dnsmasq_cmdline)}')
         self.dnsmasq_p = subprocess.Popen(dnsmasq_cmdline)
@@ -47,3 +52,6 @@ class DnsmasqDhcpServer:
             self.dnsmasq_p.wait()
             self.dnsmasq_p = None
             logger.info('dnsmasq child process terminated')
+        if self.lease_file:
+            os.unlink(self.lease_file.name)
+            self.lease_file = None

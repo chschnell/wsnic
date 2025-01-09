@@ -29,7 +29,7 @@ class WsnicConfig:
         self.wss_server_cert = None
         self.wss_server_key = None
         self.dhcp_service = 'internal'
-        self.dhcp_lease_file = '/var/lib/misc/dnsmasq.leases'
+        self.dhcp_lease_file = None
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
