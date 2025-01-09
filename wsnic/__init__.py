@@ -3,7 +3,7 @@
 ## Shared package classes.
 ##
 
-import logging, random, subprocess, struct
+import os, logging, random, subprocess, struct
 
 from select import EPOLLIN, EPOLLOUT
 from collections import deque
@@ -68,6 +68,29 @@ def log_eth_frame(tag, eth_frame, logger):
     eth_type = ETH_TYPES.get(eth_type, hex(eth_type))
     ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
     logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
+
+class Sysctl:
+    def __init__(self):
+        self.old_values = {}
+
+    def exists(self, path):
+        return os.path.isfile(f'/proc/sys/{path}')
+
+    def write(self, path, value):
+        if self.exists(path):
+            with open(f'/proc/sys/{path}', 'r') as f_in:
+                self.old_values[path] = f_in.read()
+            with open(f'/proc/sys/{path}', 'w') as f_out:
+                f_out.write(f'{value}\n')
+            return True
+        return False
+
+    def restore_values(self):
+        for path, value in self.old_values.items():
+            with open(f'/proc/sys/{path}', 'w') as f_out:
+                f_out.write(value)
+
+sysctl = Sysctl()
 
 class Exec:
     def __init__(self, logger, check=False):
