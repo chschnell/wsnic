@@ -93,7 +93,7 @@ class WebSocketClient(Pollable):
             self.wants_send(False)
             if self.closing:
                 self.close()
-        else:
+        elif self.sock:
             try:
                 self.sock.send(eth_frame)
             except OSError as e:
