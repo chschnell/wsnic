@@ -116,6 +116,9 @@ class WsnicServer:
         sysctl.write('net/ipv6/conf/all/forwarding', 1)
         sysctl.write('net/ipv6/conf/default/forwarding', 1)
 
+        sysctl.write('net/ipv4/conf/all/accept_local', 1)
+        sysctl.write('net/ipv4/conf/default/accept_local', 1)
+
         self.netbe = self.netbe_class(self)
         self.netbe.open()
 
