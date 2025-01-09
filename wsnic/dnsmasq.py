@@ -20,15 +20,23 @@ class DnsmasqDhcpServer:
         dhcp_ip_lo = self.config.host_addrs[0]
         dhcp_ip_hi = self.config.host_addrs[-1]
         dhcp_dns = ','.join(self.config.dhcp_domain_name_server)
-        dnsmasq_cmdline = [
-            # '--no-resolv', '--no-hosts', 
-            'dnsmasq', '--keep-in-foreground', '--no-ping', f'--interface={iface}', '--dhcp-sequential-ip',
-            '--except-interface=lo', f'--listen-address={self.config.server_addr}', '--bind-interfaces',
+        # '--no-resolv', '--no-hosts', 
+        # --dhcp-relay=<local address>[,<server address>[#<server port>]][,<interface]
+        # f'--dhcp-relay=192.168.2.1,10.0.0.1', f'--dhcp-proxy',
+        dnsmasq_cmdline = ['dnsmasq', '--keep-in-foreground', '--no-ping',
+            f'--interface={iface}',
+            f'--except-interface=lo',
+            f'--listen-address={self.config.server_addr}',
+            f'--bind-interfaces',
             f'--dhcp-range={dhcp_ip_lo},{dhcp_ip_hi},{self.config.netmask},{self.config.dhcp_lease_time}s',
-            f'--dhcp-option=6,{dhcp_dns}', f'--dhcp-option=26,{self.config.dhcp_mtu}'
+            f'--dhcp-option=6,{dhcp_dns}',
+            #f'--dhcp-option=26,{self.config.dhcp_mtu}',
+            f'--dhcp-sequential-ip',
         ]
         if self.config.dhcp_domain_name:
             dnsmasq_cmdline.append(f'--domain={self.config.dhcp_domain_name}')
+        if self.config.dhcp_lease_file:
+            dnsmasq_cmdline.append(f'--dhcp-leasefile={self.config.dhcp_lease_file}')
 
         logger.info(f'start child process: {" ".join(dnsmasq_cmdline)}')
         self.dnsmasq_p = subprocess.Popen(dnsmasq_cmdline)
