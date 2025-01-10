@@ -11,8 +11,11 @@ from wsnic.tuntap import open_tap
 logger = logging.getLogger('tapdev')
 
 class TapDeviceNetworkBackend(NetworkBackend):
-    ## - maintains a single, shared TAP file Pollable for all ws_clients
-    ## - needs ws_client MAC to forward packets to ws_clients by packet destination MAC address
+    ## - maintains a single, shared TAP device file for all ws_clients
+    ## - maintains a map "mac_to_client" that maps MAC addresses to ws_client objects
+    ## - takes source MAC address from 1st frame from ws_client as ws_client's MAC address
+    ## - forwards frames to ws_clients by each frame's destination MAC address
+    ## - maintains set of all ws_clients to forward multicast and broadcast frames
     ##
     def __init__(self, server):
         super().__init__(server)
@@ -137,10 +140,10 @@ class TapDevice(Pollable):
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
-        if eth_frame is None:
-            self.wants_send(False)
-        else:
+        if eth_frame:
             os.write(self.fd, eth_frame)
+        else:
+            self.wants_send(False)
 
     def recv_ready(self):
         self.netbe.forward_to_ws_client(os.read(self.fd, 65535))
