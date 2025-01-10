@@ -73,22 +73,20 @@ class Sysctl:
     def __init__(self):
         self.old_values = {}
 
-    def exists(self, path):
-        return os.path.isfile(f'/proc/sys/{path}')
-
     def write(self, path, value):
-        if self.exists(path):
+        path = f'/proc/sys/{path}'
+        if os.path.isfile(path):
             if path not in self.old_values:
-                with open(f'/proc/sys/{path}', 'r') as f_in:
+                with open(path, 'r') as f_in:
                     self.old_values[path] = f_in.read()
-            with open(f'/proc/sys/{path}', 'w') as f_out:
+            with open(path, 'w') as f_out:
                 f_out.write(f'{value}\n')
             return True
         return False
 
     def restore_values(self):
         for path, value in self.old_values.items():
-            with open(f'/proc/sys/{path}', 'w') as f_out:
+            with open(path, 'w') as f_out:
                 f_out.write(value)
 
 sysctl = Sysctl()
