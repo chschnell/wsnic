@@ -7,7 +7,7 @@ import logging, os, shutil, tempfile, subprocess
 
 logger = logging.getLogger('dnsmasq')
 
-class DnsmasqDhcpServer:
+class Dnsmasq:
     def __init__(self, server):
         self.server = server
         self.config = server.config
