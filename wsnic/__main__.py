@@ -135,7 +135,9 @@ class WsnicServer:
             poll_events = self.epoll.poll(2)    ## blocking wait for up to 2 seconds
             tm_now = time.time()
             for fd, ev in poll_events:
-                pollable = self.pollables[fd]
+                pollable = self.pollables.get(fd, None)
+                if not pollable:
+                    continue
                 if ev & select.EPOLLIN:
                     pollable.recv_ready()
                 if ev & select.EPOLLOUT:
