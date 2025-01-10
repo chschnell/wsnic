@@ -119,10 +119,10 @@ class BridgedTapDevice(Pollable):
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
-        if eth_frame is None:
-            self.wants_send(False)
-        else:
+        if eth_frame:
             os.write(self.fd, eth_frame)
+        else:
+            self.wants_send(False)
 
     def recv_ready(self):
         self.ws_client.send(os.read(self.fd, 65535))
