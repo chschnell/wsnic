@@ -141,15 +141,15 @@ class Pollable:
             self.epoll_flags = epoll_flags
             self.epoll.modify(self.fd, epoll_flags)
 
-    def send(self, eth_frame):
+    def recv_ready(self):
+        ## called when wants_recv is True and self.fd has data available
         pass
 
     def send_ready(self):
         ## called when wants_send is True and self.fd is clear to send
         pass
 
-    def recv_ready(self):
-        ## called when wants_recv is True and self.fd has data available
+    def send(self, eth_frame):
         pass
 
     def refresh(self, tm_now):
@@ -189,9 +189,5 @@ class NetworkBackend:
         pass
 
     def forward_from_ws_client(self, ws_client, eth_frame):
-        ## Called by WebSocketClient.recv() when a new eth_frame has arrived.
-        pass
-
-    def dhcp_lease_assigned(self, mac_addr, ip_addr):
-        ## Called by DhcpNetwork.assign_address() whenever a DHCP lease has been assigned to a MAC address.
+        ## Called by WebSocketClient.recv() when a new eth_frame has arrived
         pass

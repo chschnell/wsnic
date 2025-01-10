@@ -4,7 +4,7 @@
 * supports different network backend configurations using linux network [TAP devices](https://en.wikipedia.org/wiki/TUN/TAP) and [bridges](https://wiki.archlinux.org/title/Network_bridge)
 * uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * supports WebSockets Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
-* provides DHCP services to WebSocket clients using either [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) or an internal implementation
+* uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP services to WebSocket clients
 * uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and  network devices
 * sends periodic PINGs to idle WebSocket clients
 

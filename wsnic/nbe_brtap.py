@@ -9,6 +9,7 @@
 import os, logging
 
 from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str, random_private_mac
+from wsnic.dnsmasq import Dnsmasq
 from wsnic.tuntap import open_tap
 
 logger = logging.getLogger('brtap')
@@ -51,9 +52,9 @@ class BridgedTapNetworkBackend(NetworkBackend):
         self._install_nat_rules(True)
         logger.info(f'created bridge {self.br_iface}')
 
-        ## install DHCP server on bridge
-        self.dhcp_server = self.server.create_dhcp_server()
-        if self.dhcp_server:
+        ## install DHCP server on bridge interface
+        if self.config.dhcp_service != 'disabled':
+            self.dhcp_server = Dnsmasq(self.server)
             self.dhcp_server.open(self.br_iface)
 
     def close(self):
@@ -108,12 +109,8 @@ class BridgedTapDevice(Pollable):
             os.close(fd)
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
-    def send(self, eth_frame):
-        if len(eth_frame):
-            was_empty = self.out.is_empty()
-            self.out.append(eth_frame)
-            if was_empty:
-                self.wants_send(True)
+    def recv_ready(self):
+        self.ws_client.send(os.read(self.fd, 65535))
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
@@ -122,5 +119,9 @@ class BridgedTapDevice(Pollable):
         else:
             self.wants_send(False)
 
-    def recv_ready(self):
-        self.ws_client.send(os.read(self.fd, 65535))
+    def send(self, eth_frame):
+        if len(eth_frame):
+            was_empty = self.out.is_empty()
+            self.out.append(eth_frame)
+            if was_empty:
+                self.wants_send(True)

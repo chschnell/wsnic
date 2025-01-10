@@ -24,9 +24,6 @@ class BridgedVethNetworkBackend(BridgedTapNetworkBackend):
             logger.info(f'assigned VM MAC {mac2str(src_mac)} to {ws_client.pkt_sink.veth_vm_iface}')
         super().forward_from_ws_client(ws_client, eth_frame)
 
-    def dhcp_lease_assigned(self, mac_addr, ip_addr):
-        print(f'==> {mac2str(mac_addr)} <-> {ip_addr}')
-
     def _create_pollable(self, ws_client):
         return BridgedVethCLient(self.server, ws_client)
 
@@ -79,12 +76,10 @@ class BridgedVethCLient(Pollable):
         if self.veth_br_iface:
             Exec(logger, check=True)(f'ip link del {self.veth_br_iface}')
 
-    def send(self, eth_frame):
-        if len(eth_frame):
-            was_empty = self.out.is_empty()
-            self.out.append(eth_frame)
-            if was_empty:
-                self.wants_send(True)
+    def recv_ready(self):
+        eth_frame = self.sock.recv(65535)
+        self.ws_client.send(eth_frame)
+        # log_eth_frame('veth->ws', eth_frame, logger)
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
@@ -94,7 +89,9 @@ class BridgedVethCLient(Pollable):
             self.sock.send(eth_frame)
             # log_eth_frame('ws->veth', eth_frame, logger)
 
-    def recv_ready(self):
-        eth_frame = self.sock.recv(65535)
-        self.ws_client.send(eth_frame)
-        # log_eth_frame('veth->ws', eth_frame, logger)
+    def send(self, eth_frame):
+        if len(eth_frame):
+            was_empty = self.out.is_empty()
+            self.out.append(eth_frame)
+            if was_empty:
+                self.wants_send(True)

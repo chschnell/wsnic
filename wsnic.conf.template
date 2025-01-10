@@ -52,9 +52,9 @@ eth_iface=eth0
 subnet=192.168.2.0/24
 
 #
-# DHCP service provider: either "dnsmasq", "internal" or "disabled"
+# DHCP service provider: either "dnsmasq" or "disabled"
 #
-dhcp_service=internal
+dhcp_service=dnsmasq
 
 #
 # DHCP lease database file

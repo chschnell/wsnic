@@ -6,6 +6,7 @@
 import os, logging, struct
 
 from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str
+from wsnic.dnsmasq import Dnsmasq
 from wsnic.tuntap import open_tap
 
 logger = logging.getLogger('tapdev')
@@ -29,8 +30,8 @@ class TapDeviceNetworkBackend(NetworkBackend):
         self.tap_dev = TapDevice(self.server)
         self.tap_dev.open()
         ## install DHCP server on TAP device interface
-        self.dhcp_server = self.server.create_dhcp_server()
-        if self.dhcp_server:
+        if self.config.dhcp_service != 'disabled':
+            self.dhcp_server = Dnsmasq(self.server)
             self.dhcp_server.open(self.tap_dev.tap_iface)
 
     def close(self):
@@ -142,12 +143,8 @@ class TapDevice(Pollable):
             self._install_nat_rules(False)
             logger.info(f'destroyed TAP device {self.tap_iface}')
 
-    def send(self, eth_frame):
-        if len(eth_frame):
-            was_empty = self.out.is_empty()
-            self.out.append(eth_frame)
-            if was_empty:
-                self.wants_send(True)
+    def recv_ready(self):
+        self.netbe.forward_to_ws_client(os.read(self.fd, 65535))
 
     def send_ready(self):
         eth_frame = self.out.get_frame()
@@ -156,5 +153,9 @@ class TapDevice(Pollable):
         else:
             self.wants_send(False)
 
-    def recv_ready(self):
-        self.netbe.forward_to_ws_client(os.read(self.fd, 65535))
+    def send(self, eth_frame):
+        if len(eth_frame):
+            was_empty = self.out.is_empty()
+            self.out.append(eth_frame)
+            if was_empty:
+                self.wants_send(True)

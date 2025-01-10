@@ -8,8 +8,6 @@ import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
 from wsnic import sysctl
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
-from wsnic.dhcp import DhcpServer
-from wsnic.dnsmasq import DnsmasqDhcpServer
 from wsnic.nbe_tapdev import TapDeviceNetworkBackend
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 from wsnic.nbe_brveth import BridgedVethNetworkBackend
@@ -26,7 +24,7 @@ class WsnicConfig:
         self.wss_server_port = 8071
         self.wss_server_cert = None
         self.wss_server_key = None
-        self.dhcp_service = 'internal'
+        self.dhcp_service = 'dnsmasq'
         self.dhcp_lease_file = None
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
@@ -95,17 +93,6 @@ class WsnicServer:
                 pass
             if fd in self.pollables:
                 del self.pollables[fd]
-
-    def create_dhcp_server(self):
-        if self.config.dhcp_service == 'dnsmasq':
-            return DnsmasqDhcpServer(self)
-        elif self.config.dhcp_service == 'disabled':
-            return None
-        else:
-            if self.config.dhcp_service != 'internal':
-                logger.error(f'unexpected dhcp_service config value "{self.config.dhcp_service}", falling back to internal DHCP service')
-                self.config.dhcp_service = 'internal'
-            return DhcpServer(self)
 
     def run(self):
         sysctl.write('net/ipv4/ip_forward', 1)
