@@ -20,7 +20,7 @@ class WebSocketServer(Pollable):
     def __init__(self, server):
         super().__init__(server)
         self.addr = f'{self.config.ws_server_addr}:{self.config.ws_server_port}'
-        self.ws_clients = []
+        self.ws_clients = set()
         self.sock = None
 
     def open(self):
@@ -36,7 +36,7 @@ class WebSocketServer(Pollable):
     def close(self):
         super().close()
         ws_clients = self.ws_clients
-        self.ws_clients = []
+        self.ws_clients = set()
         for ws_client in ws_clients:
             ws_client.close()
         if self.sock:
@@ -50,12 +50,11 @@ class WebSocketServer(Pollable):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         ws_client = WebSocketClient(self)
         ws_client.open(sock, addr)
-        self.ws_clients.append(ws_client)
+        self.ws_clients.add(ws_client)
         logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
 
     def remove_client(self, ws_client):
-        if ws_client in self.ws_clients:
-            self.ws_clients.remove(ws_client)
+        self.ws_clients.discard(ws_client)
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
@@ -75,12 +74,11 @@ class WebSocketClient(Pollable):
     def open(self, sock, addr):
         self.sock = sock
         self.addr = f'{addr[0]}:{addr[1]}'
-        self.netbe.attach_client(self)
         super().open(sock.fileno())
 
     def close(self):
         super().close()
-        self.netbe.detach_client(self)
+        self.netbe.detach_ws_client(self)
         self.ws_server.remove_client(self)
         if self.sock is not None:
             self.sock.close()
@@ -142,6 +140,7 @@ class WebSocketClient(Pollable):
                     logger.warning(f'{self.addr}: received unhandled WebSocket packet: {ev.opcode} {ev}')
             elif isinstance(ev, Request):
                 self.proto.send_response(self.proto.accept(ev))
+                self.netbe.attach_ws_client(self)
                 logger.info(f'{self.addr}: accepted WebSocket client connection')
             else:
                 logger.error(f'{self.addr}: received unexpected ws packet: {ev}')

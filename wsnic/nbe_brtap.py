@@ -67,17 +67,15 @@ class BridgedTapNetworkBackend(NetworkBackend):
         logger.info(f'destroyed bridge {self.br_iface}')
         self.is_opened = False
 
-    def attach_client(self, ws_client):
+    def attach_ws_client(self, ws_client):
         tap_dev = self._create_pollable(ws_client)
         tap_dev.open()
         ws_client.pkt_sink = tap_dev
-        super().attach_client(ws_client)
 
-    def detach_client(self, ws_client):
+    def detach_ws_client(self, ws_client):
         if ws_client.pkt_sink:
             ws_client.pkt_sink.close()
             ws_client.pkt_sink = None
-        super().detach_client(ws_client)
 
     def forward_from_ws_client(self, ws_client, eth_frame):
         ws_client.pkt_sink.send(eth_frame)
