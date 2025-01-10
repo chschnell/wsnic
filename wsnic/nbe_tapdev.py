@@ -19,11 +19,13 @@ class TapDeviceNetworkBackend(NetworkBackend):
     ##
     def __init__(self, server):
         super().__init__(server)
-        self.eth_iface = server.config.eth_iface
-        self.dhcp_server = None
-        self.tap_dev = None
+        self.ws_clients = set()     ## set(WebSocketClient ws_client)
+        self.mac_to_client = {}     ## dict(bytes mac[6] => WebSocketClient ws_client)
+        self.tap_dev = None         ## TapDevice, the shared TAP device
+        self.dhcp_server = None     ## DHCP server bound to TAP device, optional
 
     def open(self):
+        ## create and open shared TAP device
         self.tap_dev = TapDevice(self.server)
         self.tap_dev.open()
         ## install DHCP server on TAP device interface
@@ -38,6 +40,14 @@ class TapDeviceNetworkBackend(NetworkBackend):
         if self.tap_dev:
             self.tap_dev.close()
             self.tap_dev = None
+
+    def attach_ws_client(self, ws_client):
+        self.ws_clients.add(ws_client)
+
+    def detach_ws_client(self, ws_client):
+        if ws_client.mac_addr and ws_client.mac_addr in self.mac_to_client:
+            del self.mac_to_client[ws_client.mac_addr]
+        self.ws_clients.discard(ws_client)
 
     def forward_to_ws_client(self, eth_frame):
         ## Called internally by TapDevice.recv_ready() when a new eth_frame has arrived.
@@ -79,7 +89,8 @@ class TapDeviceNetworkBackend(NetworkBackend):
             return
         dst_mac, src_mac = struct.unpack_from('6s6s', eth_frame)
         if not ws_client.mac_addr:
-            self.set_client_mac(ws_client, src_mac)
+            self.mac_to_client[src_mac] = ws_client
+            ws_client.mac_addr = src_mac
             logger.info(f'{ws_client.addr} is using MAC address {mac2str(src_mac)}')
         if dst_mac[0] & 0x1:
             for ws_client_i in self.mac_to_client.values():

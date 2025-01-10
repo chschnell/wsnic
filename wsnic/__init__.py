@@ -115,6 +115,15 @@ class Pollable:
         self.epoll_flags = epoll_flags
         self.fd = None
 
+    def open(self, fd):
+        self.fd = fd
+        self.server.register_pollable(fd, self, self.epoll_flags)
+
+    def close(self):
+        if self.fd is not None:
+            self.server.unregister_pollable(self.fd)
+            self.fd = None
+
     def wants_recv(self, do_recv):
         ## add/remove self.fd to/from epoll's observed set of input-fds
         self._wants_flag(do_recv, EPOLLIN)
@@ -132,14 +141,8 @@ class Pollable:
             self.epoll_flags = epoll_flags
             self.epoll.modify(self.fd, epoll_flags)
 
-    def open(self, fd):
-        self.fd = fd
-        self.server.register_pollable(fd, self, self.epoll_flags)
-
-    def close(self):
-        if self.fd is not None:
-            self.server.unregister_pollable(self.fd)
-            self.fd = None
+    def send(self, eth_frame):
+        pass
 
     def send_ready(self):
         ## called when wants_send is True and self.fd is clear to send
@@ -147,9 +150,6 @@ class Pollable:
 
     def recv_ready(self):
         ## called when wants_recv is True and self.fd has data available
-        pass
-
-    def send(self, eth_frame):
         pass
 
     def refresh(self, tm_now):
@@ -173,28 +173,19 @@ class NetworkBackend:
     def __init__(self, server):
         self.server = server        ## WsnicServer
         self.config = server.config ## WsnicConfig
-        self.ws_clients = set()     ## set(WebSocketClient ws_client)
-        self.mac_to_client = {}     ## dict(bytes mac[6] => WebSocketClient ws_client)
-
-    def attach_client(self, ws_client):
-        self.ws_clients.add(ws_client)
-
-    def detach_client(self, ws_client):
-        if ws_client.mac_addr and ws_client.mac_addr in self.mac_to_client:
-            del self.mac_to_client[ws_client.mac_addr]
-        self.ws_clients.discard(ws_client)
-
-    def set_client_mac(self, ws_client, mac):
-        if ws_client.mac_addr != mac:
-            if ws_client.mac_addr and ws_client.mac_addr in self.mac_to_client:
-                del self.mac_to_client[ws_client.mac_addr]
-            self.mac_to_client[mac] = ws_client
-            ws_client.mac_addr = mac
 
     def open(self):
         pass
 
     def close(self):
+        pass
+
+    def attach_ws_client(self, ws_client):
+        ## called by WebSocketClient.recv() after the WebSocket handshake completed
+        pass
+
+    def detach_ws_client(self, ws_client):
+        ## called by WebSocketClient.close(), even if attach_ws_client() was never called (must be idempotent)
         pass
 
     def forward_from_ws_client(self, ws_client, eth_frame):
