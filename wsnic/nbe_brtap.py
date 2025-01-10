@@ -2,6 +2,9 @@
 ## nbe_brtap.py
 ## Network backend: Network bridge with one Linux TAP device per WebSocket client.
 ##
+## Links:
+## - Tap networking with QEMU
+##   https://wiki.archlinux.org/title/QEMU#Tap_networking_with_QEMU
 
 import os, logging
 
@@ -37,17 +40,17 @@ class BridgedTapNetworkBackend(NetworkBackend):
         if self.is_opened:
             return
         self.is_opened = True
-        ## create bridge
+
+        ## create bridge with manually fixed MAC address, see https://superuser.com/a/1725894
         run = Exec(logger, check=True)
-        run(f'ip link add dev {self.br_iface} type bridge')
-        run(f'ip link set dev {self.br_iface} address {mac2str(random_private_mac())}')
+        run(f'ip link add dev {self.br_iface} address {mac2str(random_private_mac())} type bridge')
         run(f'ip addr add dev {self.br_iface} {self.config.server_addr}/{self.config.netmask} brd +')
-        #run(f'ip link set dev {self.br_iface} promisc on')
         run(f'ip link set dev {self.br_iface} up')
 
         ## setup bridge NAT rules
         self._install_nat_rules(True)
         logger.info(f'created bridge {self.br_iface}')
+
         ## install DHCP server on bridge
         self.dhcp_server = self.server.create_dhcp_server()
         if self.dhcp_server:
@@ -91,14 +94,12 @@ class BridgedTapDevice(Pollable):
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def open(self):
+        ## create and open ws_client's TAP device
         self.fd, self.tap_iface = open_tap('wstap%d')
         super().open(self.fd)
 
         ## attach TAP device to bridge and bring it up
-        run = Exec(logger, check=True)
-        run(f'ip link set dev {self.tap_iface} master {self.br_iface}')
-        #run(f'ip link set dev {self.tap_iface} promisc on')
-        run(f'ip link set dev {self.tap_iface} up')
+        Exec(logger, check=True)(f'ip link set dev {self.tap_iface} master {self.br_iface} up')
 
         logger.info(f'created bridged TAP device {self.tap_iface}')
 

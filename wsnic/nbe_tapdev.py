@@ -37,10 +37,9 @@ class TapDeviceNetworkBackend(NetworkBackend):
             self.tap_dev = None
 
     def forward_to_ws_client(self, eth_frame):
-        ## called internally by TapDevice.recv_ready() when a new eth_frame has arrived.
+        ## Called internally by TapDevice.recv_ready() when a new eth_frame has arrived.
         ##
         ## Function:
-        ## - [ indirectly through: self.server.relay_to_ws_client(os.read(self.fd, 65535)) ]
         ## - extract destination MAC address from eth_frame
         ## - lookup ws_client by MAC
         ##   if exists:
@@ -60,7 +59,7 @@ class TapDeviceNetworkBackend(NetworkBackend):
             logger.debug(f'dropped packet to ws:{mac2str(dst_mac)}')
 
     def forward_from_ws_client(self, ws_client, eth_frame):
-        ## called by WebSocketClient.recv() when a new eth_frame has arrived.
+        ## Called by WebSocketClient.recv() when a new eth_frame has arrived.
         ##
         ## Implementation:
         ## - extract destination and source MAC addresses from eth_frame
@@ -73,7 +72,7 @@ class TapDeviceNetworkBackend(NetworkBackend):
         ## - else:
         ##     forward eth_frame to TAP only
         ##
-        if not ws_client in self.ws_clients:
+        if ws_client not in self.ws_clients:
             return
         dst_mac, src_mac = struct.unpack_from('6s6s', eth_frame)
         if not ws_client.mac_addr:
@@ -114,8 +113,6 @@ class TapDevice(Pollable):
         ## set TAP device IP address/netmask/MTU and bring it up
         run = Exec(logger, check=True)
         run(f'ip addr add dev {self.tap_iface} {self.config.server_addr}/{self.config.netmask} brd +')
-        run(f'ip link set dev {self.tap_iface} mtu {self.config.dhcp_mtu}')
-        run(f'ip link set dev {self.tap_iface} promisc on')
         run(f'ip link set dev {self.tap_iface} up')
 
         ## setup NAT rules for TAP device

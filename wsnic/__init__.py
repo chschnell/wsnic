@@ -78,8 +78,9 @@ class Sysctl:
 
     def write(self, path, value):
         if self.exists(path):
-            with open(f'/proc/sys/{path}', 'r') as f_in:
-                self.old_values[path] = f_in.read()
+            if path not in self.old_values:
+                with open(f'/proc/sys/{path}', 'r') as f_in:
+                    self.old_values[path] = f_in.read()
             with open(f'/proc/sys/{path}', 'w') as f_out:
                 f_out.write(f'{value}\n')
             return True
