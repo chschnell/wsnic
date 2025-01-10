@@ -150,8 +150,8 @@ class WsnicServer:
 
 def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to virtual network device proxy server.')
-    parser.add_argument('-n', help='use network backend NETBE (tapdev or brtap; default: tapdev)',
-        choices=['tapdev', 'brtap', 'brveth'], default='tapdev', dest='netbe', metavar='NETBE')
+    parser.add_argument('-n', help='use network backend NETBE (tapdev or brtap; default: brtap)',
+        choices=['tapdev', 'brtap', 'brveth'], default='brtap', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
