@@ -78,4 +78,5 @@ dhcp_domain_name=
 # - optional, 0 or any number of Domain Name Server IP addresses separated by ","
 # - example: dhcp_domain_name_server=8.8.8.8, 8.8.4.4
 # - if unspecified, the gateway address is used as the DHCP server address (192.168.2.1, see subnet)
+#
 dhcp_domain_name_server=
