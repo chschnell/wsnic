@@ -29,7 +29,6 @@ class WsnicConfig:
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
-        self.dhcp_mtu = 1500
         ## network settings dynamically derived from self.subnet:
         self.server_addr = None
         self.host_addrs = None
@@ -45,7 +44,7 @@ class WsnicConfig:
                 if hasattr(self, opt_name):
                     if opt_name in ['dhcp_domain_name_server']:
                         opt_value = re.split(r'[,:;\s]+', opt_value)
-                    elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time', 'dhcp_mtu']:
+                    elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time']:
                         opt_value = int(opt_value)
                     elif opt_value == '':
                         opt_value = None
@@ -59,15 +58,6 @@ class WsnicConfig:
         self.host_addrs = [str(addr) for addr in hosts]
         self.broadcast_addr = str(ip_subnet.broadcast_address)
         self.netmask = str(ip_subnet.netmask)
-
-        self.dhcp_service = self.dhcp_service.lower()
-        if self.dhcp_service == 'dnsmasq':
-            if shutil.which('dnsmasq') is None:
-                self.dhcp_service = 'internal'
-                logger.warning(f'dnsmasq: file not found, falling back to internal DHCP service (Debian: install apt package dnsmasq)')
-        elif self.dhcp_service not in ['internal', 'disabled']:
-            self.dhcp_service = 'internal'
-            logger.warning(f'{conf_filename}: unknown value {self.dhcp_service} for option dhcp_service, falling back to internal DHCP service')
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
@@ -157,6 +147,12 @@ def main():
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
     args = parser.parse_args()
 
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
+    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
+
+    config = WsnicConfig(args.conf)
+
     if os.geteuid() != 0:
         print(f'error: must be run by root')
         return
@@ -165,6 +161,9 @@ def main():
         return
     elif shutil.which('iptables') is None:
         print(f'iptables: file not found (Debian: install apt package iptables)')
+        return
+    elif config.dhcp_service == 'dnsmasq' and shutil.which('dnsmasq') is None:
+        print(f'dnsmasq: file not found (Debian: install apt package dnsmasq)')
         return
 
     netbe_class = None
@@ -175,11 +174,7 @@ def main():
     elif args.netbe == 'brveth':
         netbe_class = BridgedVethNetworkBackend
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
-    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
-
-    server = WsnicServer(WsnicConfig(args.conf), netbe_class)
+    server = WsnicServer(config, netbe_class)
     try:
         server.run()
     except KeyboardInterrupt:
