@@ -71,9 +71,15 @@ def log_eth_frame(tag, eth_frame, logger):
 
 class Sysctl:
     def __init__(self):
+        self.enabled = True
         self.old_values = {}
 
+    def disable(self):
+        self.enabled = False
+
     def write(self, path, value):
+        if not self.enabled:
+            return False
         path = f'/proc/sys/{path}'
         if os.path.isfile(path):
             if path not in self.old_values:
