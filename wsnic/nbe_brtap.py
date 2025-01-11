@@ -15,8 +15,6 @@ from wsnic.tuntap import open_tap
 logger = logging.getLogger('brtap')
 
 class BridgedTapNetworkBackend(NetworkBackend):
-    ## - maintains one TAP device per ws_client
-    ##
     def __init__(self, server):
         super().__init__(server)
         self.br_iface = 'wsbr0'
@@ -68,9 +66,13 @@ class BridgedTapNetworkBackend(NetworkBackend):
         self.is_opened = False
 
     def attach_ws_client(self, ws_client):
-        tap_dev = self._create_pollable(ws_client)
-        tap_dev.open()
-        ws_client.pkt_sink = tap_dev
+        ## Create a new BridgedTapDevice tap_device and link it and the
+        ## given newly accepted WebSocketClient ws_client to each other:
+        ## - ws_client.pkt_sink points to tap_device
+        ## - tap_device.ws_client points to ws_client
+        tap_device = self._create_pollable(ws_client)
+        tap_device.open()
+        ws_client.pkt_sink = tap_device
 
     def detach_ws_client(self, ws_client):
         if ws_client.pkt_sink:
@@ -109,11 +111,12 @@ class BridgedTapDevice(Pollable):
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
     def recv_ready(self):
-        while self.fd:
-            try:
+        try:
+            while self.fd:
                 self.ws_client.send(os.read(self.fd, 65535))
-            except BlockingIOError:
-                break
+        except BlockingIOError:
+            ## os.read() has had no data to return
+            pass
 
     def send_ready(self):
         while self.fd and not self.out.is_empty():
