@@ -15,10 +15,10 @@ class StunnelProxyServer:
 
     def open(self):
         if not os.path.isfile(self.config.wss_server_cert):
-            logger.warning(f'{self.config.wss_server_cert}: file not found, TLS support diabled')
+            logger.warning(f'{self.config.wss_server_cert}: file not found, TLS support disabled')
             return
         elif shutil.which('stunnel') is None:
-            logger.warning(f'stunnel: file not found, TLS support diabled (Debian: install apt package stunnel)')
+            logger.warning(f'stunnel: file not found, TLS support disabled (Debian: install apt package stunnel)')
             return
 
         stunnel_foreground = 'yes' if logger.isEnabledFor(logging.DEBUG) else 'quiet'
