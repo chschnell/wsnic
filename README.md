@@ -1,4 +1,4 @@
-**wsnic** is a WebSocket to virtual network device proxy server for Linux.
+**wsnic** is a WebSocket to virtual network proxy server for Linux.
 
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
@@ -141,3 +141,47 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 ```
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
+
+## How it works
+
+Overview of wsnic and its network components:
+
+```
+ +-----+     +-----+         +-----+
+ | ws0 |     | ws1 |   ...   | wsN |    (WebSocket clients)
+ +--+--+     +--+--+         +--+--+
+    |           |               |
++===+===========+===============+====+
+|   :           :               :    |  (wsnic WebSocket server)
++===+===========+===============+====+
+    |           |               |
++---+----+  +---+----+      +---+----+
+| wstap0 |  | wstap1 |      | wstapN |  (TAP devices)
++---+----+  +---+----+      +---+----+
+    |           |               |
++---+-----------+---------------+----+
+|               wsbr0                |  (virtual bridge)
++-----------------+-------------+----+
+                  |             |
+          NAT (MASQUERADE)      |
+                  |         [dnsmasq]   (DHCP server)
+               +--+---+
+               | eth0 |                 (physical network)
+               +--+---+
+                  |
+               Internet
+```
+
+Roughly, wsnic works like this:
+
+* on startup, wsnic:
+  * creates virtual bridge `wsbr0` and assigns it the subnet's first IP address,
+  * optionally attaches `wsbr0` to the physical network adapter `eth0` using NAT,
+  * optionally starts DHCP server `dnsmasq` and binds it to the IP address of `wsbr0`, and
+  * starts operating as the WebSocket server, listening for WebSocket client connections
+* after completing the handshake of a newly accepted WebSocket client connection `wsX`, wsnic:
+  * creates a TAP device `wstapX`,
+  * connects `wstapX` to `wsbr0`, and
+  * begins passing ethernet frames between `wsX` and `wstapX`
+* if a WebSocket client disconnects, wsnic removes the associated TAP device from the bridge (and network)
+* DHCP server `dnsmasq` assigns DHCP leases to WebSocket clients, it is also the default DNS server
