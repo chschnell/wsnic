@@ -26,7 +26,7 @@ class WsnicConfig:
         self.dhcp_lease_file = None
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
-        self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']   # TODO: default empty == self.self.server_addr
+        self.dhcp_domain_name_server = None
 
         if os.path.isfile(conf_filename):
             with open(conf_filename) as f_in:
@@ -52,6 +52,8 @@ class WsnicConfig:
         self.host_addrs = [str(addr) for addr in hosts]
         self.broadcast_addr = str(ip_subnet.broadcast_address)
         self.netmask = str(ip_subnet.netmask)
+        if not self.dhcp_domain_name_server:
+            self.dhcp_domain_name_server = [self.server_addr]
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
