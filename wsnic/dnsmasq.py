@@ -21,10 +21,7 @@ class Dnsmasq:
         dhcp_ip_lo = self.config.host_addrs[0]
         dhcp_ip_hi = self.config.host_addrs[-1]
         dhcp_dns = ','.join(self.config.dhcp_domain_name_server)
-        # '--no-resolv', '--no-hosts', 
-        # --dhcp-relay=<local address>[,<server address>[#<server port>]][,<interface]
-        # f'--dhcp-relay=192.168.2.1,10.0.0.1', f'--dhcp-proxy',
-        dnsmasq_cmdline = ['dnsmasq', '--keep-in-foreground', '--no-ping',
+        cmdline = ['dnsmasq', '--keep-in-foreground', '--no-ping', '--no-hosts',
             f'--interface={iface}',
             f'--except-interface=lo',
             f'--listen-address={self.config.server_addr}',
@@ -34,16 +31,16 @@ class Dnsmasq:
             f'--dhcp-sequential-ip',
         ]
         if self.config.dhcp_domain_name:
-            dnsmasq_cmdline.append(f'--domain={self.config.dhcp_domain_name}')
+            cmdline.append(f'--domain={self.config.dhcp_domain_name}')
         if self.config.dhcp_lease_file:
-            dnsmasq_cmdline.append(f'--dhcp-leasefile={self.config.dhcp_lease_file}')
+            cmdline.append(f'--dhcp-leasefile={self.config.dhcp_lease_file}')
         else:
             self.lease_file = tempfile.NamedTemporaryFile(delete=False)
             self.lease_file.close()
-            dnsmasq_cmdline.append(f'--dhcp-leasefile={self.lease_file.name}')
+            cmdline.append(f'--dhcp-leasefile={self.lease_file.name}')
 
-        logger.info(f'start child process: {" ".join(dnsmasq_cmdline)}')
-        self.dnsmasq_p = subprocess.Popen(dnsmasq_cmdline)
+        logger.info(f'start child process: {" ".join(cmdline)}')
+        self.dnsmasq_p = subprocess.Popen(cmdline)
 
     def close(self):
         if self.dnsmasq_p:
