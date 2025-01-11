@@ -64,7 +64,7 @@ dhcp_service=dnsmasq
 dhcp_lease_file=
 
 #
-# DHCP lease time in seconds
+# DHCP lease time in seconds (defaults to 24 hours)
 #
 dhcp_lease_time=86400
 
