@@ -1,11 +1,12 @@
 **wsnic** is a WebSocket to virtual network device proxy server for linux.
 
-* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a configurable network backend and an open number of WebSocket clients
-* supports different network backend configurations using linux network [TAP devices](https://en.wikipedia.org/wiki/TUN/TAP) and [bridges](https://wiki.archlinux.org/title/Network_bridge)
+* passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
+* creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
+* supports attaching the bridge to a physical network device using Network Address Translation (NAT) to grant Internet-access to WebSocket clients
 * uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * supports WebSockets Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
-* uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP services to WebSocket clients
-* uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and  network devices
+* uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP and DNS services to WebSocket clients
+* uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and network devices
 * sends periodic PINGs to idle WebSocket clients
 
 ## Installation
@@ -17,7 +18,14 @@ Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop
 First, make sure that the packages required by wsnic are installed, for Debian:
 
 ```bash
-sudo apt install python3-venv iproute2 iptables stunnel
+sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
+```
+
+Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
+
+```bash
+sudo systemctl stop dnsmasq
+sudo systemctl disable dnsmasq
 ```
 
 stunnel is only required for `wss://` support and otherwise not needed.
@@ -134,24 +142,3 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 ```
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
-
-## DHCP server dnsmasq
-
-In order to use [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) with wsnic it only needs to be installed, run these installation commands under Debian:
-
-```bash
-sudo apt install dnsmasq
-
-sudo systemctl stop dnsmasq
-sudo systemctl disable dnsmasq
-```
-
-By default, the debian installer configures the dnsmasq systemd service to be started during boot time, and it also starts the service at the end of the installation procedure.
-
-To generally avoid conflicts no other DHCP server should be running on the same host as wsnic, the `systemctl stop` and `disable` commands make sure that dnsmasq is not running before wsnic is started.
-
-After installing dnsmasq enable it in `wsnic.conf` using:
-
-```
-dhcp_service=dnsmasq
-```

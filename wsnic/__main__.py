@@ -8,9 +8,7 @@ import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
 from wsnic import sysctl
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
-from wsnic.nbe_tapdev import TapDeviceNetworkBackend
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
-from wsnic.nbe_brveth import BridgedVethNetworkBackend
 
 logger = logging.getLogger('main')
 
@@ -28,7 +26,7 @@ class WsnicConfig:
         self.dhcp_lease_file = None
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
-        self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
+        self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']   # TODO: default empty == self.self.server_addr
 
         if os.path.isfile(conf_filename):
             with open(conf_filename) as f_in:
@@ -136,8 +134,8 @@ class WsnicServer:
 
 def main():
     parser = argparse.ArgumentParser(prog='wsnic', description='WebSocket to virtual network device proxy server.')
-    parser.add_argument('-n', help='use network backend NETBE (tapdev or brtap; default: brtap)',
-        choices=['tapdev', 'brtap', 'brveth'], default='brtap', dest='netbe', metavar='NETBE')
+    parser.add_argument('-n', help='use network backend NETBE (currently only default "brtap" supported)',
+        choices=['brtap'], default='brtap', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
@@ -163,12 +161,8 @@ def main():
         return
 
     netbe_class = None
-    if args.netbe == 'tapdev':
-        netbe_class = TapDeviceNetworkBackend
-    elif args.netbe == 'brtap':
+    if args.netbe == 'brtap':
         netbe_class = BridgedTapNetworkBackend
-    elif args.netbe == 'brveth':
-        netbe_class = BridgedVethNetworkBackend
 
     server = WsnicServer(config, netbe_class)
     try:
