@@ -142,6 +142,33 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
 
+## Docker image
+
+Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest release.
+
+### Build wsnic Docker image
+
+Build Docker image with tag `wsnic:latest` using:
+
+```bash
+sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
+```
+
+### Run wsnic Docker image
+
+When you run the Docker image you must specify your `wsnic.conf` as a relative or absolute file name as shown below (`./wsnic.conf`), and optionally the path to the TLS server certificate file `/var/local/crt/cert.crt` (and optional key file `/var/local/crt/cert.key`):
+
+```bash
+sudo docker run -it --rm --network host --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    -v ./wsnic.conf:/wsnic/wsnic.conf \
+    -v /var/local/crt/cert.crt:/wsnic/cert/cert.crt \
+    -v /var/local/crt/cert.key:/wsnic/cert/cert.key \
+    wsnic:latest
+```
+
+Options `wss_server_cert` and `wss_server_key` in `wsnic.conf` are ignored when running under Docker.
+
 ## How it works
 
 Overview of wsnic and its network components:

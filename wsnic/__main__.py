@@ -13,7 +13,7 @@ from wsnic.nbe_brtap import BridgedTapNetworkBackend
 logger = logging.getLogger('main')
 
 class WsnicConfig:
-    def __init__(self, conf_filename):
+    def __init__(self, conf_filename, docker_mode):
         ## settings available in wsnic.conf:
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
@@ -44,6 +44,12 @@ class WsnicConfig:
                     setattr(self, opt_name, opt_value)
                 else:
                     logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
+
+        if docker_mode:
+            if os.path.isfile('/wsnic/cert/cert.crt'):
+                self.wss_server_cert = '/wsnic/cert/cert.crt'
+            if os.path.isfile('/wsnic/cert/cert.key'):
+                self.wss_server_key = '/wsnic/cert/cert.key'
 
         ## network settings dynamically derived from self.subnet:
         ip_subnet = ipaddress.ip_network(self.subnet)
@@ -140,6 +146,7 @@ def main():
         choices=['brtap'], default='brtap', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
+    parser.add_argument('--docker-mode', help='run using fixed Docker configuration', action='store_true')
     parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
     args = parser.parse_args()
 
@@ -147,7 +154,7 @@ def main():
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
     logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
 
-    config = WsnicConfig(args.conf)
+    config = WsnicConfig(args.conf, args.docker_mode)
 
     if os.geteuid() != 0:
         print(f'error: must be run by root')
@@ -161,6 +168,9 @@ def main():
     elif config.dhcp_service == 'dnsmasq' and shutil.which('dnsmasq') is None:
         print(f'dnsmasq: file not found (Debian: install apt package dnsmasq)')
         return
+
+    if args.docker_mode:
+        sysctl.disable()
 
     netbe_class = None
     if args.netbe == 'brtap':
