@@ -34,19 +34,21 @@ wss_server_cert=
 wss_server_key=
 
 #
-# Interface name of your existing upstream NIC
+# Interface name of a physical network device that provides Internet access.
+# If defined, temporary NAT rules are installed for the bridge and inet_iface.
+# example: inet_iface=eth0
 #
-eth_iface=eth0
+inet_iface=
 
 #
 # Subnet
 # - subnet's first and last IP addresses are reserved for network and broadcast addresses
-# - subnet's second IP is reserved for the TAP device (also DHCP server and gateway IP)
+# - subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP)
 # - remaining IP addresses are used for the DHCP address pool
 # - example for the default subnet 192.168.2.0/24:
 #   - network address: 192.168.2.0
 #   - broadcast address: 192.168.2.255
-#   - TAP device/DHCP server/gateway address: 192.168.2.1
+#   - bridge/gateway address/DHCP server: 192.168.2.1
 #   - DHCP address pool: 192.168.2.2, 192.168.2.3, ..., 192.168.2.254
 #
 subnet=192.168.2.0/24

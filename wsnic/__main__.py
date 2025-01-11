@@ -17,7 +17,7 @@ class WsnicConfig:
         ## settings available in wsnic.conf:
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
-        self.eth_iface = 'eth0'
+        self.inet_iface = None
         self.subnet = '192.168.2.0/24'
         self.wss_server_port = 8071
         self.wss_server_cert = None

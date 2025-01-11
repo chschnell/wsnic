@@ -20,22 +20,21 @@ class BridgedTapNetworkBackend(NetworkBackend):
     def __init__(self, server):
         super().__init__(server)
         self.br_iface = 'wsbr0'
-        self.eth_iface = self.config.eth_iface
         self.dhcp_server = None
         self.is_opened = False
         self.restrict_inbound = True
 
     def _install_nat_rules(self, do_install):
-        cmd = '-A' if do_install else '-D'
-        run = Exec(logger, check=do_install)
-        run(f'iptables {cmd} POSTROUTING -t nat -s {self.config.subnet} -o {self.eth_iface} -j MASQUERADE')
-        if self.restrict_inbound:
-            run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
-        else:
-            run(f'iptables {cmd} FORWARD -i {self.eth_iface} -o {self.br_iface} -j ACCEPT')
-
-        run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.eth_iface} -d {self.config.subnet} -j DROP')
-        run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.eth_iface} -j ACCEPT')
+        if self.config.inet_iface:
+            cmd = '-A' if do_install else '-D'
+            run = Exec(logger, check=do_install)
+            run(f'iptables {cmd} POSTROUTING -t nat -s {self.config.subnet} -o {self.config.inet_iface} -j MASQUERADE')
+            if self.restrict_inbound:
+                run(f'iptables {cmd} FORWARD -i {self.config.inet_iface} -o {self.br_iface} -m state --state RELATED,ESTABLISHED -j ACCEPT')
+            else:
+                run(f'iptables {cmd} FORWARD -i {self.config.inet_iface} -o {self.br_iface} -j ACCEPT')
+            run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.config.inet_iface} -d {self.config.subnet} -j DROP')
+            run(f'iptables {cmd} FORWARD -i {self.br_iface} -o {self.config.inet_iface} -j ACCEPT')
 
     def open(self):
         if self.is_opened:

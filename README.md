@@ -1,4 +1,4 @@
-**wsnic** is a WebSocket to virtual network device proxy server for linux.
+**wsnic** is a WebSocket to virtual network device proxy server for Linux.
 
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
@@ -13,7 +13,7 @@
 
 Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
-#### Step 1/3: Install required linux tools
+#### Step 1/3: Install required Linux tools
 
 First, make sure that the packages required by wsnic are installed, for Debian:
 
@@ -47,10 +47,9 @@ cd ..
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
-* `eth_iface`, the physical interface defaults to `eth0` but could be something different like `enp0s3`, check with command `ip addr`.
+* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might conflict with your local network configuration and must then be changed accordingly
+* `inet_iface`, set this to the name of a physical network device that can route internet traffic (usually similar to `eth0` or `enp0s3`) to provide Internet access to WebSocket clients
 * `wss_server_cert`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file `wss_server_key`)
-* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might collide with your local network configuration and must then be changed accordingly
-* `dhcp_domain_name` and `dhcp_domain_name_server`, the DNS domain name and DNS domain name server(s) to be used in DHCP replies
 
 Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in `wsnic.conf`.
 
@@ -72,7 +71,7 @@ WebSocket to virtual network device proxy server.
 
 options:
   -h, --help    show this help message and exit
-  -n NETBE      use network backend NETBE (tapdev, brtap, brveth or pktsock; default: tapdev)
+  -n NETBE      use network backend NETBE (currently only default "brtap" supported)
   -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
   -v            print verbose output
 ```
