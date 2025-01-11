@@ -16,7 +16,7 @@ logger = logging.getLogger('main')
 
 class WsnicConfig:
     def __init__(self, conf_filename):
-        ## settings meant to be overriden in wsnic.conf:
+        ## settings available in wsnic.conf:
         self.ws_server_addr = '127.0.0.1'
         self.ws_server_port = 8070
         self.eth_iface = 'eth0'
@@ -29,11 +29,6 @@ class WsnicConfig:
         self.dhcp_lease_time = 86400
         self.dhcp_domain_name = None
         self.dhcp_domain_name_server = ['8.8.8.8', '8.8.4.4']
-        ## network settings dynamically derived from self.subnet:
-        self.server_addr = None
-        self.host_addrs = None
-        self.broadcast_addr = None
-        self.netmask = None
 
         if os.path.isfile(conf_filename):
             with open(conf_filename) as f_in:
@@ -52,6 +47,7 @@ class WsnicConfig:
                 else:
                     logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
 
+        ## network settings dynamically derived from self.subnet:
         ip_subnet = ipaddress.ip_network(self.subnet)
         hosts = ip_subnet.hosts()
         self.server_addr = str(next(hosts))
