@@ -70,6 +70,7 @@ class WebSocketClient(Pollable):
         ## members maintained by NetworkBackend
         self.mac_addr = None                  ## bytes, this client's MAC address
         self.pkt_sink = None                  ## Pollable, this client's separate packet sink
+        self._max_frames_queued = 0
 
     def open(self, sock, addr):
         self.sock = sock
@@ -83,32 +84,36 @@ class WebSocketClient(Pollable):
         if self.sock is not None:
             self.sock.close()
             self.sock = None
-            logger.info(f'{self.addr}: WebSocket client disconnected')
+            logger.info(f'{self.addr}: WebSocket client disconnected (max. frames queued: {self._max_frames_queued})')
 
     def send_ready(self):
-        eth_frame = self.out.get_frame()
-        if eth_frame is None:
+        try:
+            while self.sock and not self.out.is_empty():
+                self.sock.send(self.out.get_frame())
+        except OSError as e:
+            self.close()
+            logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
+        else:
             self.wants_send(False)
             if self.closing:
                 self.close()
-        elif self.sock:
-            try:
-                self.sock.send(eth_frame)
-            except OSError as e:
-                self.close()
-                logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
 
     def recv_ready(self):
-        try:
-            ws_frame = self.sock.recv(65535)
-        except OSError as e:
-            ws_frame = b''
-            logger.debug(f'{self.addr}: WebSocket client disconnected at recv(), reason: {e}')
-        if ws_frame:
-            self.recv(ws_frame)
-            self.last_recv_tm = time.time()
-        else:
-            self.close()
+        while self.sock:
+            try:
+                ws_data = self.sock.recv(65535)
+            except BlockingIOError:
+                break
+            except OSError as e:
+                logger.debug(f'{self.addr}: WebSocket client disconnected at recv(), reason: {e}')
+                self.close()
+                break
+            if ws_data:
+                self.recv(ws_data)
+                self.last_recv_tm = time.time()
+            else:
+                self.proto.receive_eof()
+                self._pump()
 
     def refresh(self, tm_now):
         if tm_now - self.last_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
@@ -124,10 +129,7 @@ class WebSocketClient(Pollable):
             logger.warning(f'{self.addr}: dropped frame in send() due to non-OPEN proto state {self.proto.state}')
 
     def recv(self, ws_data):
-        if ws_data:
-            self.proto.receive_data(ws_data)
-        else:
-            self.proto.receive_eof()
+        self.proto.receive_data(ws_data)
         self._pump()
 
         for ev in self.proto.events_received():
@@ -154,6 +156,7 @@ class WebSocketClient(Pollable):
             for data in data_to_send:
                 if len(data):
                     self.out.append(data)
+                    self._max_frames_queued = max(self._max_frames_queued, len(self.out.queue))
                 elif self.out.is_empty():
                     self.close()
                     return

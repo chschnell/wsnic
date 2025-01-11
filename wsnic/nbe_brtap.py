@@ -110,18 +110,19 @@ class BridgedTapDevice(Pollable):
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
     def recv_ready(self):
-        self.ws_client.send(os.read(self.fd, 65535))
+        while self.fd:
+            try:
+                self.ws_client.send(os.read(self.fd, 65535))
+            except BlockingIOError:
+                break
 
     def send_ready(self):
-        eth_frame = self.out.get_frame()
-        if eth_frame:
-            os.write(self.fd, eth_frame)
-        else:
-            self.wants_send(False)
+        while self.fd and not self.out.is_empty():
+            os.write(self.fd, self.out.get_frame())
+        self.wants_send(False)
 
     def send(self, eth_frame):
         if len(eth_frame):
-            was_empty = self.out.is_empty()
-            self.out.append(eth_frame)
-            if was_empty:
+            if self.out.is_empty():
                 self.wants_send(True)
+            self.out.append(eth_frame)
