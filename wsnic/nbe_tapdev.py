@@ -125,7 +125,7 @@ class TapDevice(Pollable):
         self.fd, self.tap_iface = open_tap('wstap%d')
         super().open(self.fd)
 
-        ## set TAP device IP address/netmask/MTU and bring it up
+        ## set TAP device IP address, netmask and broadcast address, and bring it up
         run = Exec(logger, check=True)
         run(f'ip addr add dev {self.tap_iface} {self.config.server_addr}/{self.config.netmask} brd +')
         run(f'ip link set dev {self.tap_iface} up')

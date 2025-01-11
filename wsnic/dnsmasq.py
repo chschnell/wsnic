@@ -31,7 +31,6 @@ class Dnsmasq:
             f'--bind-interfaces',
             f'--dhcp-range={dhcp_ip_lo},{dhcp_ip_hi},{self.config.netmask},{self.config.dhcp_lease_time}s',
             f'--dhcp-option=6,{dhcp_dns}',
-            #f'--dhcp-option=26,{self.config.dhcp_mtu}',
             f'--dhcp-sequential-ip',
         ]
         if self.config.dhcp_domain_name:

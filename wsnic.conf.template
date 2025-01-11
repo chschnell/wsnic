@@ -57,7 +57,7 @@ subnet=192.168.2.0/24
 dhcp_service=dnsmasq
 
 #
-# DHCP lease database file
+# DHCP lease database file (use temp file if empty)
 #
 dhcp_lease_file=
 
@@ -76,8 +76,3 @@ dhcp_domain_name=
 # - optional, 0 or any number of Domain Name Server IP addresses
 #
 dhcp_domain_name_server=8.8.8.8, 8.8.4.4
-
-#
-# Maximum Transmission Unit (MTU) announced in DHCP replies
-#
-dhcp_mtu=1500
