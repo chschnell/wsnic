@@ -11,14 +11,14 @@ ws_server_addr=127.0.0.1
 #
 # WebSocket server port (ws://)
 #
-ws_server_port=8070
+ws_server_port=8086
 
 #
 # Secure WebSocket server port (wss://)
 # To enable wss support point wss_server_cert and optionally wss_server_key
 # to valid TLS server certificate files.
 #
-wss_server_port=8071
+wss_server_port=8087
 
 #
 # PEM formatted file containing either just the public server certificate or

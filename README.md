@@ -51,8 +51,8 @@ sudo docker run --rm --interactive --tty \
     -e WSNIC_DHCP_DOMAIN_NAME=v86.local \
     -v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt \
     -v /var/local/crt/cert.key:/opt/wsnic/cert/cert.key \
-    -p 8070:80 \
-    -p 8071:443 \
+    -p 8086:80 \
+    -p 8087:443 \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
     --sysctl net.ipv4.ip_forward=1 \
@@ -66,7 +66,7 @@ Arguments:
 * `--tty` -- allocate a pseudo-TTY
 * `-e WSNIC_ENABLE_HOSTNET=1` -- set environment variable WSNIC_ENABLE_HOSTNET to `1`
 * `-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt`  -- mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
-* `-p 8070:80` -- map internal Docker TCP port 80 to host's TCP port 8070
+* `-p 8086:80` -- map internal Docker TCP port 80 to host's TCP port 8086
 * `--cap-add=NET_ADMIN` -- allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
 * `--device /dev/net/tun:/dev/net/tun` -- map the TUN device from host into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
 * `--sysctl net.ipv4.ip_forward=1` -- allow IP forwarding in the Docker image
@@ -154,7 +154,7 @@ wss_server_cert=/var/local/crt/cert.crt
 wss_server_key=/var/local/crt/cert.key
 ```
 
-WebSocket Secure URLs are of the form `wss://wsnic.example.com:8071`.
+WebSocket Secure URLs are of the form `wss://wsnic.example.com:8087`.
 
 ### Self-signed TLS server certificate
 
@@ -191,7 +191,7 @@ You can add multiple alternate DNS names and IP addresses, use comma `,` to sepa
 By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser. Start wsnic and point your browser at your wsnic server using a HTTPS URL like:
 
 ```
-https://wsnic.example.com:8071
+https://wsnic.example.com:8087
 ```
 
 You will get a security warning that you need to acknowledge once to grant permission permanently. After that you should see a reply page from wsnic's WebSocket server that reads:

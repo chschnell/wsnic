@@ -16,8 +16,8 @@ class WsnicConfig:
     def __init__(self, conf_filename, docker_mode):
         ## defaults for settings available in wsnic.conf
         self.ws_server_addr = '127.0.0.1'   ## str, WebSocket server and stunnel bind address
-        self.ws_server_port = 8070          ## int, WebSocket server port (ws://)
-        self.wss_server_port = 8071         ## int, WebSocket Secure server port (wss://)
+        self.ws_server_port = 8086          ## int, WebSocket server port (ws://)
+        self.wss_server_port = 8087         ## int, WebSocket Secure server port (wss://)
         self.wss_server_cert = None         ## str, PEM encoded certificate file, enables WebSocket Secure if defined
         self.wss_server_key = None          ## str, PEM encoded private key file, optional
         self.inet_iface = None              ## str, name of an interface that provides Internet access
