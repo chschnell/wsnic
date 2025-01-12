@@ -21,7 +21,7 @@ class WsnicConfig:
         self.wss_server_cert = None         ## str, PEM encoded certificate file, enables WebSocket Secure if defined
         self.wss_server_key = None          ## str, PEM encoded private key file, optional
         self.inet_iface = None              ## str, name of an interface that provides Internet access
-        self.subnet = '192.168.2.0/24'      ## str, defines bridge IP, gateway and DHCP server
+        self.subnet = '192.168.86.0/24'     ## str, defines bridge IP, gateway and DHCP server
         self.dhcp_service = 'dnsmasq'       ## str, "dnsmasq": use dnsmasq, anything else: disable DHCP
         self.dhcp_lease_file = None         ## str, DHCP lease database file, use temp file if undefined
         self.dhcp_lease_time = 86400        ## int, DHCP lease time in seconds

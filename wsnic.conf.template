@@ -45,13 +45,13 @@ inet_iface=
 # - subnet's first and last IP addresses are reserved for network and broadcast addresses
 # - subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP)
 # - remaining IP addresses are used for the DHCP address pool
-# - example for the default subnet 192.168.2.0/24:
-#   - network address: 192.168.2.0
-#   - broadcast address: 192.168.2.255
-#   - bridge/gateway address/DHCP server: 192.168.2.1
-#   - DHCP address pool: 192.168.2.2, 192.168.2.3, ..., 192.168.2.254
+# - example for the default subnet 192.168.86.0/24:
+#   - network address: 192.168.86.0
+#   - broadcast address: 192.168.86.255
+#   - bridge/gateway address/DHCP server: 192.168.86.1
+#   - DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254
 #
-subnet=192.168.2.0/24
+subnet=192.168.86.0/24
 
 #
 # DHCP service provider: either "dnsmasq" or "disabled"
@@ -77,6 +77,6 @@ dhcp_domain_name=
 # Domain Name Server IP address(es) announced in DHCP replies
 # - optional, 0 or any number of Domain Name Server IP addresses separated by ","
 # - example: dhcp_domain_name_server=8.8.8.8, 8.8.4.4
-# - if unspecified, the gateway address is used as the DHCP server address (192.168.2.1, see subnet)
+# - if unspecified, the gateway address is used as the DHCP server address (192.168.86.1, see subnet)
 #
 dhcp_domain_name_server=

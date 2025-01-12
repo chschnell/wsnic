@@ -32,7 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY ./wsnic/*.py ./wsnic/
 
 # Define wsnic environment variable defaults.
-ENV WSNIC_SUBNET="192.168.2.0/24"
+ENV WSNIC_SUBNET="192.168.86.0/24"
 ENV WSNIC_ENABLE_HOSTNET="0"
 ENV WSNIC_ENABLE_DHCP="1"
 ENV WSNIC_DHCP_LEASE_TIME="86400"

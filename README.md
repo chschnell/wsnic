@@ -27,7 +27,7 @@ There are several environment variables, TCP port numbers and files that can be 
 
 | Environment variable | Default | Description |
 | :---- | :--- | :--- |
-| **WSNIC_SUBNET**                  | `192.168.2.0/24`  | The subnet that wsnic will use |
+| **WSNIC_SUBNET**                  | `192.168.86.0/24` | The subnet that wsnic will use |
 | **WSNIC_ENABLE_HOSTNET**          | `0`               | If set to `1`, grant WebSocket guests access to the host's network (and Internet) |
 | **WSNIC_ENABLE_DHCP**             | `1`               | If set to `0`, disable DHCP server dnsmasq for WebSocket guests |
 | **WSNIC_DHCP_LEASE_TIME**         | `86400`           | DHCP lease time in seconds |
@@ -109,7 +109,7 @@ cd ..
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
-* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.2.0/24` which might conflict with your local network configuration and must then be changed accordingly
+* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.86.0/24` which might conflict with your local network configuration and must then be changed accordingly
 * `inet_iface`, set this to the name of a physical network device that can route internet traffic (usually similar to `eth0` or `enp0s3`) to provide Internet access to WebSocket clients
 * `wss_server_cert`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file `wss_server_key`)
 
