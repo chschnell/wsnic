@@ -36,12 +36,12 @@ There are several environment variables, TCP port numbers and files that can be 
 
 Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
 
-An optional TLS server certificate file (and its optional key file) must be volume mounted into to the image, wsnic expects these fixed file paths:
+An optional TLS server certificate file (and its optional key file) must be volume mounted into to the image, at startup wsnic looks for them at these fixed file paths in the Docker file system:
 
 * `/opt/wsnic/cert/cert.crt`
 * `/opt/wsnic/cert/cert.key`
 
-TLS support in wsnic is only enabled if a valid TLS certificate has been mounted.
+TLS support in wsnic is only enabled if a valid TLS certificate has been found.
 
 A full example to illustrate these options:
 
@@ -61,15 +61,24 @@ sudo docker run --rm --interactive --tty \
 
 Arguments:
 
-* **--rm** -- remove Docker image when closing
-* **--interactive** -- keep STDIN open
-* **--tty** -- allocate a pseudo-TTY
-* **-e WSNIC_ENABLE_HOSTNET=1** -- set environment variable WSNIC_ENABLE_HOSTNET to `1`
-* **-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt**  -- mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
-* **-p 8086:80** -- map internal Docker TCP port 80 to host's TCP port 8086
-* **--cap-add=NET_ADMIN** -- allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
-* **--device /dev/net/tun:/dev/net/tun** -- map host's TUN device file into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
-* **--sysctl net.ipv4.ip_forward=1** -- allow IP forwarding in the Docker image
+* **--rm**  
+   remove Docker image when closing
+* **--interactive**  
+   keep STDIN open
+* **--tty**  
+   allocate a pseudo-TTY
+* **-e WSNIC_ENABLE_HOSTNET=1**  
+   set environment variable WSNIC_ENABLE_HOSTNET to `1`
+* **-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt**  
+   mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
+* **-p 8086:80**  
+   map internal Docker TCP port 80 to host's TCP port 8086
+* **--cap-add=NET_ADMIN**  
+   allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
+* **--device /dev/net/tun:/dev/net/tun**  
+   map host's TUN device file into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
+* **--sysctl net.ipv4.ip_forward=1**  
+   allow IP forwarding in the Docker image
 
 ## How to build wsnic from the sources
 
