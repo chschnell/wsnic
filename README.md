@@ -27,12 +27,12 @@ There are several environment variables, TCP port numbers and files that can be 
 
 | Docker environment variable | Description |
 | :---- | :--- |
-| **WSNIC_SUBNET**           | The subnet that wsnic will use, see [`subnet`](#conf_subnet) for details. Default: **192.168.86.0/24**. |
+| **WSNIC_SUBNET**           | The subnet that wsnic will use, see option [`subnet`](#conf_subnet) for details. |
 | **WSNIC_ENABLE_HOSTNET**   | If set to `1`, grant WebSocket guests access to the host's network (and Internet, if available). Default: **0**. |
 | **WSNIC_ENABLE_DHCP**      | If set to `0`, disable DHCP server dnsmasq for WebSocket guests. Default: **1**. |
-| **WSNIC_DHCP_LEASE_TIME**  | DHCP lease time in seconds. Default: **86400**. |
-| **WSNIC_DHCP_DOMAIN_NAME** | Domain Name of this subnet. Optioal, default: *undefined*. |
-| **WSNIC_DHCP_NAMESERVER**  | Comma-separated list of DNS IP addresses, defaults to bridge address (dnsmasq) if undefined. Optioal, default: *undefined*. |
+| **WSNIC_DHCP_LEASE_TIME**  | DHCP lease time, see option [`dhcp_lease_time`](#conf_dhcp_lease_time) for details. |
+| **WSNIC_DHCP_DOMAIN_NAME** | Domain Name of this subnet, see option [`dhcp_domain_name`](#conf_dhcp_domain_name) for details. |
+| **WSNIC_DHCP_NAMESERVER**  | List of DNS IP addresses, see option [`dhcp_nameserver`](#conf_dhcp_nameserver) for details. |
 
 Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
 
@@ -125,18 +125,18 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 
 | Option | Description |
 | :--- | :--- |
-| **ws_server_addr**   | WebSocket server address, use `127.0.0.1` if wsnic runs on the same machine as the WebSocket client (browser), or `0.0.0.0` to make wsnic available in the network. Default: **127.0.0.1**. |
-| **ws_server_port**   | WebSocket server port (ws://). Default: **8086**. |
-| **wss_server_port**  | WebSocket Secure server port (wss://). Default: **8087**. |
-| **wss_server_cert**  | Absolute path of a PEM formatted file containing either just the public server certificate or an entire certificate chain including public key, private key, and root certificates. Optional, default: *undefined*. |
-| **wss_server_key**   | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
-| **inet_iface**       | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
+| **ws_server_addr** | WebSocket server address, use `127.0.0.1` if wsnic runs on the same machine as the WebSocket client (browser), or `0.0.0.0` to make wsnic available in the network. Default: **127.0.0.1**. |
+| **ws_server_port** | WebSocket server port (ws://). Default: **8086**. |
+| **wss_server_port** | WebSocket Secure server port (wss://). Default: **8087**. |
+| **wss_server_cert** | Absolute path of a PEM formatted file containing either just the public server certificate or an entire certificate chain including public key, private key, and root certificates. Optional, default: *undefined*. |
+| **wss_server_key** | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
+| **inet_iface** | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
 | **<span id="conf_subnet"></span>subnet** | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
-| **dhcp_service**     | DHCP service provider, either `dnsmasq` or `disabled`. Default: **dnsmasq**. |
-| **dhcp_lease_file**  | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*.  |
-| **dhcp_lease_time**  | DHCP lease time in seconds. Default: **86400** (24 hours). |
-| **dhcp_domain_name** | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
-| **dhcp_nameserver**  | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DHCP server address.<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
+| **dhcp_service** | DHCP service provider, either `dnsmasq` or `disabled`. Default: **dnsmasq**. |
+| **dhcp_lease_file** | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*. |
+| **<span id="conf_dhcp_lease_time"></span>dhcp_lease_time** | DHCP lease time in seconds. Default: **86400** (24 hours). |
+| **<span id="conf_dhcp_domain_name"></span>dhcp_domain_name** | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
+| **<span id="conf_dhcp_nameserver"></span>dhcp_nameserver** | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DHCP server address.<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
 
 ### Using wsnic from sources
 
