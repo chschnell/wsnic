@@ -27,8 +27,8 @@ There are several environment variables, TCP port numbers and files that can be 
 
 | Docker environment variable | Description |
 | :---- | :--- |
-| **WSNIC_SUBNET**           | The subnet that wsnic will use. Default: **192.168.86.0/24**. |
-| **WSNIC_ENABLE_HOSTNET**   | If set to `1`, grant WebSocket guests access to the host's network (and Internet). Default: **0**. |
+| **WSNIC_SUBNET**           | The subnet that wsnic will use, see [`subnet`](#conf_subnet) for details. Default: **192.168.86.0/24**. |
+| **WSNIC_ENABLE_HOSTNET**   | If set to `1`, grant WebSocket guests access to the host's network (and Internet, if available). Default: **0**. |
 | **WSNIC_ENABLE_DHCP**      | If set to `0`, disable DHCP server dnsmasq for WebSocket guests. Default: **1**. |
 | **WSNIC_DHCP_LEASE_TIME**  | DHCP lease time in seconds. Default: **86400**. |
 | **WSNIC_DHCP_DOMAIN_NAME** | Domain Name of this subnet. Optioal, default: *undefined*. |
@@ -131,7 +131,7 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 | **wss_server_cert**  | Absolute path of a PEM formatted file containing either just the public server certificate or an entire certificate chain including public key, private key, and root certificates. Optional, default: *undefined*. |
 | **wss_server_key**   | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
 | **inet_iface**       | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
-| **subnet**           | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
+| **<span id="conf_subnet"></span>subnet** | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
 | **dhcp_service**     | DHCP service provider, either `dnsmasq` or `disabled`. Default: **dnsmasq**. |
 | **dhcp_lease_file**  | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*.  |
 | **dhcp_lease_time**  | DHCP lease time in seconds. Default: **86400** (24 hours). |
