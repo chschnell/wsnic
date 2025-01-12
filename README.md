@@ -150,15 +150,18 @@ Command line options:
 
 ```
 $ ./wsnic.sh -h
-usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v]
+usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v] [-q] [--use-syslog] [--docker-mode]
 
 WebSocket to virtual network device proxy server.
 
 options:
-  -h, --help    show this help message and exit
-  -n NETBE      use network backend NETBE (currently only default "brtap" supported)
-  -c CONF_FILE  use configuration file CONF_FILE (default: wsnic.conf)
-  -v            print verbose output
+  -h, --help     show this help message and exit
+  -n NETBE       use network backend NETBE (currently only default "brtap" supported)
+  -c CONF_FILE   use configuration file CONF_FILE (default: wsnic.conf)
+  -v             output verbose log messages
+  -q             output warning and error log messages only
+  --use-syslog   send log messages to syslog
+  --docker-mode  use Docker configuration method
 ```
 
 ## WebSockets Secure support
