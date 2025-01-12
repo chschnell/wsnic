@@ -15,10 +15,10 @@
 
 Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
 
-Build the wsnic Docker container with tag `wsnic:latest` using:
+Build the wsnic Docker container with tag `wsnic:local` using:
 
 ```bash
-sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
+sudo docker buildx build -t wsnic:local -f docker/Dockerfile .
 ```
 
 ### Using the wsnic Docker image
@@ -55,7 +55,7 @@ sudo docker run --rm --interactive --tty \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
     --sysctl net.ipv4.ip_forward=1 \
-    wsnic:latest
+    wsnic:local
 ```
 
 Arguments:
