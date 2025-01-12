@@ -13,7 +13,7 @@
 
 ### Building the wsnic Docker container
 
-Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
+Follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
 
 Build the wsnic Docker container with tag `wsnic:local` using:
 
