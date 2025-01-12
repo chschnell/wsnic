@@ -136,7 +136,7 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 | **dhcp_lease_file** | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*. |
 | **<span id="conf_dhcp_lease_time"></span>dhcp_lease_time** | DHCP lease time in seconds. Default: **86400** (24 hours). |
 | **<span id="conf_dhcp_domain_name"></span>dhcp_domain_name** | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
-| **<span id="conf_dhcp_nameserver"></span>dhcp_nameserver** | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DHCP server address.<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
+| **<span id="conf_dhcp_nameserver"></span>dhcp_nameserver** | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DNS address (which gets handled by dnsmasq).<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
 
 ### Using wsnic from sources
 
