@@ -9,11 +9,73 @@
 * uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and network devices
 * sends periodic PINGs to idle WebSocket clients
 
-## Installation
+## Building and using the wsnic Docker image
+
+### How to build the wsnic Docker container
+
+Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
+
+Build Docker container with tag `wsnic:latest` using:
+
+```bash
+sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
+```
+
+### Using the wsnic Docker image
+
+There are several environment variables, TCP port numbers and files that can be specified on the `docker run` command line for customization.
+
+| Environment variable | Default | Description |
+| :---- | :--- | :--- |
+| **WSNIC_SUBNET**                  | `192.168.2.0/24`  | The subnet that wsnic will use |
+| **WSNIC_ENABLE_HOSTNET**          | `0`               | If set to `1`, grant WebSocket guests access to the host's network (and Internet) |
+| **WSNIC_ENABLE_DHCP**             | `1`               | If set to `0`, disable DHCP server dnsmasq for WebSocket guests |
+| **WSNIC_DHCP_LEASE_TIME**         | `86400`           | DHCP lease time in seconds |
+| **WSNIC_DHCP_DOMAIN_NAME**        |                   | An optional local domain name for the subnet |
+| **WSNIC_DHCP_DOMAIN_NAME_SERVER** |                   | A comma-separated list of DNS IP addresses, use dnsmasq if undefined |
+
+Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
+
+An optional TLS server certificate file (and its optional key file) must be volume mounted into to the image, wsnic expects these fixed file paths:
+
+* `/opt/wsnic/cert/cert.crt`
+* `/opt/wsnic/cert/cert.key`
+
+TLS support in wsnic is only enabled if a valid TLS certificate has been mounted.
+
+A full example to illustrate these options:
+
+```bash
+sudo docker run --rm --interactive --tty \
+    -e WSNIC_ENABLE_HOSTNET=1 \
+    -e WSNIC_DHCP_DOMAIN_NAME=v86.local \
+    -v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt \
+    -v /var/local/crt/cert.key:/opt/wsnic/cert/cert.key \
+    -p 8070:80 \
+    -p 8071:443 \
+    --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    --sysctl net.ipv4.ip_forward=1 \
+    wsnic:latest
+```
+
+Arguments:
+
+* `--rm` -- remove Docker image when closing
+* `--interactive` -- keep STDIN open
+* `--tty` -- allocate a pseudo-TTY
+* `-e WSNIC_ENABLE_HOSTNET=1` -- set environment variable WSNIC_ENABLE_HOSTNET to `1`
+* `-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt`  -- mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
+* `-p 8070:80` -- map internal Docker TCP port 80 to host's TCP port 8070
+* `--cap-add=NET_ADMIN` -- allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
+* `--device /dev/net/tun:/dev/net/tun` -- map the TUN device from host into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
+* `--sysctl net.ipv4.ip_forward=1` -- allow IP forwarding in the Docker image
+
+## How to build wsnic from the sources
 
 Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
-#### Step 1/3: Install required Linux tools
+### Step 1/3: Install required Linux tools
 
 First, make sure that the packages required by wsnic are installed, for Debian:
 
@@ -30,7 +92,7 @@ sudo systemctl disable dnsmasq
 
 stunnel is only required for `wss://` support and otherwise not needed.
 
-#### Step 2/3: Clone and initialize this repository
+### Step 2/3: Clone and initialize this repository
 
 Clone a working copy of this repository. Then, install `websockets` into the working copy using `pip`:
 
@@ -43,7 +105,7 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-#### Step 3/3: Installation setup
+### Step 3/3: Installation setup
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
@@ -141,33 +203,6 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 ```
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
-
-## Docker image
-
-Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest release.
-
-### Build wsnic Docker image
-
-Build Docker image with tag `wsnic:latest` using:
-
-```bash
-sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
-```
-
-### Run wsnic Docker image
-
-When you run the Docker image you must specify your `wsnic.conf` as a relative or absolute file name as shown below (`./wsnic.conf`), and optionally the path to the TLS server certificate file `/var/local/crt/cert.crt` (and optional key file `/var/local/crt/cert.key`):
-
-```bash
-sudo docker run -it --rm --network host --cap-add=NET_ADMIN \
-    --device /dev/net/tun:/dev/net/tun \
-    -v ./wsnic.conf:/wsnic/wsnic.conf \
-    -v /var/local/crt/cert.crt:/wsnic/cert/cert.crt \
-    -v /var/local/crt/cert.key:/wsnic/cert/cert.key \
-    wsnic:latest
-```
-
-Options `wss_server_cert` and `wss_server_key` in `wsnic.conf` are ignored when running under Docker.
 
 ## How it works
 

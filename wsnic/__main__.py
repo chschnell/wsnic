@@ -14,50 +14,70 @@ logger = logging.getLogger('main')
 
 class WsnicConfig:
     def __init__(self, conf_filename, docker_mode):
-        ## settings available in wsnic.conf:
-        self.ws_server_addr = '127.0.0.1'
-        self.ws_server_port = 8070
-        self.inet_iface = None
-        self.subnet = '192.168.2.0/24'
-        self.wss_server_port = 8071
-        self.wss_server_cert = None
-        self.wss_server_key = None
-        self.dhcp_service = 'dnsmasq'
-        self.dhcp_lease_file = None
-        self.dhcp_lease_time = 86400
-        self.dhcp_domain_name = None
-        self.dhcp_domain_name_server = None
-
-        if os.path.isfile(conf_filename):
-            with open(conf_filename) as f_in:
-                conf_file = f_in.read()
-            parser = configparser.ConfigParser(strict=True)
-            parser.read_string('[main]\n' + conf_file)
-            for opt_name, opt_value in parser.items('main'):
-                if hasattr(self, opt_name):
-                    if opt_name in ['dhcp_domain_name_server']:
-                        opt_value = re.split(r'[,:;\s]+', opt_value)
-                    elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time']:
-                        opt_value = int(opt_value)
-                    elif opt_value == '':
-                        opt_value = None
-                    setattr(self, opt_name, opt_value)
-                else:
-                    logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
+        ## defaults for settings available in wsnic.conf
+        self.ws_server_addr = '127.0.0.1'   ## str, WebSocket server and stunnel bind address
+        self.ws_server_port = 8070          ## int, WebSocket server port (ws://)
+        self.wss_server_port = 8071         ## int, WebSocket Secure server port (wss://)
+        self.wss_server_cert = None         ## str, PEM encoded certificate file, enables WebSocket Secure if defined
+        self.wss_server_key = None          ## str, PEM encoded private key file, optional
+        self.inet_iface = None              ## str, name of an interface that provides Internet access
+        self.subnet = '192.168.2.0/24'      ## str, defines bridge IP, gateway and DHCP server
+        self.dhcp_service = 'dnsmasq'       ## str, "dnsmasq": use dnsmasq, anything else: disable DHCP
+        self.dhcp_lease_file = None         ## str, DHCP lease database file, use temp file if undefined
+        self.dhcp_lease_time = 86400        ## int, DHCP lease time in seconds
+        self.dhcp_domain_name = None        ## str, local domain name announced in DHCP replies
+        self.dhcp_domain_name_server = None ## array(str), list of DNS server IPs
 
         if docker_mode:
-            if os.path.isfile('/wsnic/cert/cert.crt'):
-                self.wss_server_cert = '/wsnic/cert/cert.crt'
-            if os.path.isfile('/wsnic/cert/cert.key'):
-                self.wss_server_key = '/wsnic/cert/cert.key'
+            ## parse environment variables defined in Dockerfile
+            self.ws_server_addr = '0.0.0.0'
+            self.ws_server_port = 80
+            self.wss_server_port = 443
+            self.dhcp_lease_file = None
+            if os.path.isfile('/opt/wsnic/cert/cert.crt'):
+                self.wss_server_cert = '/opt/wsnic/cert/cert.crt'
+            if os.path.isfile('/opt/wsnic/cert/cert.key'):
+                self.wss_server_key = '/opt/wsnic/cert/cert.key'
+            if 'WSNIC_SUBNET' in os.environ and os.environ['WSNIC_SUBNET']:
+                self.subnet = os.environ['WSNIC_SUBNET']
+            if 'WSNIC_ENABLE_HOSTNET' in os.environ and os.environ['WSNIC_ENABLE_HOSTNET'] == '1':
+                self.inet_iface = 'eth0'
+            if 'WSNIC_ENABLE_DHCP' in os.environ and os.environ['WSNIC_ENABLE_DHCP'] != '1':
+                self.dhcp_service = None
+            if 'WSNIC_DHCP_LEASE_TIME' in os.environ and os.environ['WSNIC_DHCP_LEASE_TIME'].isdigit():
+                self.dhcp_lease_time = int(os.environ['WSNIC_DHCP_LEASE_TIME'])
+            if 'WSNIC_DHCP_DOMAIN_NAME' in os.environ and os.environ['WSNIC_DHCP_DOMAIN_NAME']:
+                self.dhcp_domain_name = os.environ['WSNIC_DHCP_DOMAIN_NAME']
+            if 'WSNIC_DHCP_DOMAIN_NAME_SERVER' in os.environ and os.environ['WSNIC_DHCP_DOMAIN_NAME_SERVER']:
+                self.dhcp_domain_name_server = re.split(r'[,:;\s]+', os.environ['WSNIC_DHCP_DOMAIN_NAME_SERVER'])
+        else:
+            ## parse wsnic.conf and override settings
+            if os.path.isfile(conf_filename):
+                with open(conf_filename) as f_in:
+                    conf_file = f_in.read()
+                parser = configparser.ConfigParser(strict=True)
+                parser.read_string('[main]\n' + conf_file)
+                for opt_name, opt_value in parser.items('main'):
+                    if hasattr(self, opt_name):
+                        if opt_name in ['dhcp_domain_name_server']:
+                            opt_value = re.split(r'[,:;\s]+', opt_value)
+                        elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time']:
+                            opt_value = int(opt_value)
+                        elif opt_value == '':
+                            opt_value = None
+                        setattr(self, opt_name, opt_value)
+                    else:
+                        logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
 
-        ## network settings dynamically derived from self.subnet:
+        ## derive network settings dynamically from self.subnet:
         ip_subnet = ipaddress.ip_network(self.subnet)
         hosts = ip_subnet.hosts()
         self.server_addr = str(next(hosts))
         self.host_addrs = [str(addr) for addr in hosts]
         self.broadcast_addr = str(ip_subnet.broadcast_address)
         self.netmask = str(ip_subnet.netmask)
+
+        ## use server_addr for DNS server as default
         if not self.dhcp_domain_name_server:
             self.dhcp_domain_name_server = [self.server_addr]
 
