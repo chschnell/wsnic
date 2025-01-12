@@ -43,6 +43,4 @@ ENV WSNIC_DHCP_DOMAIN_NAME_SERVER=
 EXPOSE 80 443
 
 # Run the application.
-#CMD ["python", "-m", "wsnic", "--docker-mode"]
-
 ENTRYPOINT ["python", "-m", "wsnic", "--docker-mode"]
