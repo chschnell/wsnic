@@ -24,6 +24,7 @@ class StunnelProxyServer:
         stunnel_foreground = 'yes' if logger.isEnabledFor(logging.DEBUG) else 'quiet'
         stunnel_conf = [
             f'foreground = {stunnel_foreground}',
+            f'debug = warning',
             f'',
             f'[wsnic]',
             f'TIMEOUTclose = 0',
