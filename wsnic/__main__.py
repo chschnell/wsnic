@@ -26,7 +26,7 @@ class WsnicConfig:
         self.dhcp_lease_file = None         ## str, DHCP lease database file, use temp file if undefined
         self.dhcp_lease_time = 86400        ## int, DHCP lease time in seconds
         self.dhcp_domain_name = None        ## str, local domain name announced in DHCP replies
-        self.dhcp_domain_name_server = None ## array(str), list of DNS server IPs
+        self.dhcp_nameserver = None         ## array(str), list of DNS server IPs
 
         if docker_mode:
             ## parse environment variables defined in Dockerfile
@@ -48,8 +48,8 @@ class WsnicConfig:
                 self.dhcp_lease_time = int(os.environ['WSNIC_DHCP_LEASE_TIME'])
             if 'WSNIC_DHCP_DOMAIN_NAME' in os.environ and os.environ['WSNIC_DHCP_DOMAIN_NAME']:
                 self.dhcp_domain_name = os.environ['WSNIC_DHCP_DOMAIN_NAME']
-            if 'WSNIC_DHCP_DOMAIN_NAME_SERVER' in os.environ and os.environ['WSNIC_DHCP_DOMAIN_NAME_SERVER']:
-                self.dhcp_domain_name_server = re.split(r'[,:;\s]+', os.environ['WSNIC_DHCP_DOMAIN_NAME_SERVER'])
+            if 'WSNIC_DHCP_NAMESERVER' in os.environ and os.environ['WSNIC_DHCP_NAMESERVER']:
+                self.dhcp_nameserver = re.split(r'[,:;\s]+', os.environ['WSNIC_DHCP_NAMESERVER'])
         else:
             ## parse wsnic.conf and override settings
             if os.path.isfile(conf_filename):
@@ -59,7 +59,7 @@ class WsnicConfig:
                 parser.read_string('[main]\n' + conf_file)
                 for opt_name, opt_value in parser.items('main'):
                     if hasattr(self, opt_name):
-                        if opt_name in ['dhcp_domain_name_server']:
+                        if opt_name in ['dhcp_nameserver']:
                             opt_value = re.split(r'[,:;\s]+', opt_value)
                         elif opt_name in ['ws_server_port', 'wss_server_port', 'dhcp_lease_time']:
                             opt_value = int(opt_value)
@@ -78,8 +78,8 @@ class WsnicConfig:
         self.netmask = str(ip_subnet.netmask)
 
         ## use server_addr for DNS server as default
-        if not self.dhcp_domain_name_server:
-            self.dhcp_domain_name_server = [self.server_addr]
+        if not self.dhcp_nameserver:
+            self.dhcp_nameserver = [self.server_addr]
 
 class WsnicServer:
     def __init__(self, config, netbe_class):

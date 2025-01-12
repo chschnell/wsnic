@@ -65,4 +65,4 @@ dhcp_domain_name=
 #
 # Comma-separated list of DNS IP address(es) published in DHCP replies (optional).
 #
-dhcp_domain_name_server=
+dhcp_nameserver=

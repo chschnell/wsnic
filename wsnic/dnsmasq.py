@@ -20,7 +20,7 @@ class Dnsmasq:
             return
         dhcp_ip_lo = self.config.host_addrs[0]
         dhcp_ip_hi = self.config.host_addrs[-1]
-        dhcp_dns = ','.join(self.config.dhcp_domain_name_server)
+        dhcp_dns = ','.join(self.config.dhcp_nameserver)
         cmdline = ['dnsmasq', '--keep-in-foreground', '--no-ping', '--no-hosts',
             f'--interface={iface}',
             f'--except-interface=lo',
