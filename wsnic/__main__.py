@@ -4,6 +4,7 @@
 ##
 
 import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
+import logging.handlers
 
 from wsnic import sysctl
 from wsnic.websock import WebSocketServer
@@ -13,8 +14,8 @@ from wsnic.nbe_brtap import BridgedTapNetworkBackend
 logger = logging.getLogger('main')
 
 class WsnicConfig:
-    def __init__(self, conf_filename, docker_mode):
-        ## defaults for settings available in wsnic.conf
+    def __init__(self, conf_filename, log_level, use_syslog, docker_mode):
+        ## option defaults
         self.ws_server_addr = '127.0.0.1'   ## str, WebSocket server and stunnel bind address
         self.ws_server_port = 8086          ## int, WebSocket server port (ws://)
         self.wss_server_port = 8087         ## int, WebSocket Secure server port (wss://)
@@ -80,6 +81,9 @@ class WsnicConfig:
         ## use server_addr for DNS server as default
         if not self.dhcp_nameserver:
             self.dhcp_nameserver = [self.server_addr]
+
+        self.log_level = log_level
+        self.use_syslog = use_syslog
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
@@ -166,15 +170,28 @@ def main():
         choices=['brtap'], default='brtap', dest='netbe', metavar='NETBE')
     parser.add_argument('-c', help='use configuration file CONF_FILE (default: wsnic.conf)',
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
-    parser.add_argument('--docker-mode', help='run using fixed Docker configuration', action='store_true')
-    parser.add_argument('-v', help='print verbose output', action='store_true', dest='verbose')
+    parser.add_argument('-v', help='output verbose log messages', action='store_true', dest='verbose')
+    parser.add_argument('-q', help='output warning and error log messages only', action='store_true', dest='quiet')
+    parser.add_argument('--use-syslog', help='send log messages to syslog', action='store_true')
+    parser.add_argument('--docker-mode', help='use Docker configuration method', action='store_true')
     args = parser.parse_args()
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
+    log_level = logging.INFO
+    if args.verbose:
+        log_level = logging.DEBUG
+    elif args.quiet:
+        log_level = logging.WARNING
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
     logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
 
-    config = WsnicConfig(args.conf, args.docker_mode)
+    if args.use_syslog:
+        ## replace the default STDERR-handler with SysLogHandler handler
+        handler = logging.handlers.SysLogHandler(address='/dev/log')
+        root_logger = logging.getLogger(None)
+        root_logger.removeHandler(root_logger.handlers[0])
+        root_logger.addHandler(handler)
+
+    config = WsnicConfig(args.conf, log_level, args.use_syslog, args.docker_mode)
 
     if os.geteuid() != 0:
         print(f'error: must be run by root')
