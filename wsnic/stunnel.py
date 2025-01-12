@@ -29,7 +29,7 @@ class StunnelProxyServer:
             f'[wsnic]',
             f'TIMEOUTclose = 0',
             f'socket = l:TCP_NODELAY=1',
-            f'accept = {self.config.wss_server_port}',
+            f'accept = {self.config.ws_server_addr}:{self.config.wss_server_port}',
             f'connect = {self.config.ws_server_port}',
             f'cert = {self.config.wss_server_cert}'
         ]
