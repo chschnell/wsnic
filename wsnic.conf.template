@@ -1,82 +1,68 @@
 #
-# wsnic.conf
+# wsnic.conf template file.
+#
+# The values assigned in this template file are the respective default
+# values for options left unspecified in wsnic.conf.
+#
+# See README.md for full documentation.
 #
 
 #
-# WebSocket server address
-# - use 0.0.0.0 to listen on all interfaces
+# WebSocket server address.
 #
 ws_server_addr=127.0.0.1
 
 #
-# WebSocket server port (ws://)
+# WebSocket server port (ws://).
 #
 ws_server_port=8086
 
 #
-# Secure WebSocket server port (wss://)
-# To enable wss support point wss_server_cert and optionally wss_server_key
-# to valid TLS server certificate files.
+# Secure WebSocket server port (wss://).
 #
 wss_server_port=8087
 
 #
-# PEM formatted file containing either just the public server certificate or
-# an entire certificate chain including public key, private key, and root
-# certificates.
+# Absolute file path of the PEM encoded server certificate file (optional).
 #
 wss_server_cert=
 
 #
-# Optional PEM formatted file containing just the private-key of the server
-# certificate.
+# Absolute file path of the PEM encoded private key file (optional).
 #
 wss_server_key=
 
 #
-# Interface name of a physical network device that provides Internet access.
-# If defined, temporary NAT rules are installed for the bridge and inet_iface.
-# example: inet_iface=eth0
+# Interface name of a physical network device that provides Internet access (optional).
 #
 inet_iface=
 
 #
-# Subnet
-# - subnet's first and last IP addresses are reserved for network and broadcast addresses
-# - subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP)
-# - remaining IP addresses are used for the DHCP address pool
-# - example for the default subnet 192.168.86.0/24:
-#   - network address: 192.168.86.0
-#   - broadcast address: 192.168.86.255
-#   - bridge/gateway address/DHCP server: 192.168.86.1
-#   - DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254
+# The wsnic subnet in CIDR notation.
 #
 subnet=192.168.86.0/24
 
 #
-# DHCP service provider: either "dnsmasq" or "disabled"
+# DHCP service provider: either "dnsmasq" or "disabled".
 #
 dhcp_service=dnsmasq
 
 #
-# DHCP lease database file (use temp file if empty)
+# DHCP lease database file (optional, a temp file is used if undefined).
 #
 dhcp_lease_file=
 
 #
-# DHCP lease time in seconds (defaults to 24 hours)
+# DHCP lease time in seconds (defaults to 24 hours).
 #
 dhcp_lease_time=86400
 
 #
-# Domain Name announced in DHCP replies (optional)
+# Domain Name of this subnet (optional).
 #
 dhcp_domain_name=
 
 #
-# Domain Name Server IP address(es) announced in DHCP replies
-# - optional, 0 or any number of Domain Name Server IP addresses separated by ","
-# - example: dhcp_domain_name_server=8.8.8.8, 8.8.4.4
-# - if unspecified, the gateway address is used as the DHCP server address (192.168.86.1, see subnet)
+# Comma-separated list of DNS IP address(es) published in DHCP replies (optional).
 #
 dhcp_domain_name_server=

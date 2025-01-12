@@ -25,18 +25,18 @@ sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
 
 There are several environment variables, TCP port numbers and files that can be specified on the `docker run` command line for customization.
 
-| Environment variable | Default | Description |
-| :---- | :--- | :--- |
-| **WSNIC_SUBNET**                  | `192.168.86.0/24` | The subnet that wsnic will use |
-| **WSNIC_ENABLE_HOSTNET**          | `0`               | If set to `1`, grant WebSocket guests access to the host's network (and Internet) |
-| **WSNIC_ENABLE_DHCP**             | `1`               | If set to `0`, disable DHCP server dnsmasq for WebSocket guests |
-| **WSNIC_DHCP_LEASE_TIME**         | `86400`           | DHCP lease time in seconds |
-| **WSNIC_DHCP_DOMAIN_NAME**        |                   | An optional local domain name for the subnet |
-| **WSNIC_DHCP_DOMAIN_NAME_SERVER** |                   | An optional, comma-separated list of DNS IP addresses, defaults to dnsmasq if undefined |
+| Docker environment variable | Description |
+| :---- | :--- |
+| **WSNIC_SUBNET**                  | The subnet that wsnic will use. Default: **192.168.86.0/24**. |
+| **WSNIC_ENABLE_HOSTNET**          | If set to `1`, grant WebSocket guests access to the host's network (and Internet). Default: **0**. |
+| **WSNIC_ENABLE_DHCP**             | If set to `0`, disable DHCP server dnsmasq for WebSocket guests. Default: **1**. |
+| **WSNIC_DHCP_LEASE_TIME**         | DHCP lease time in seconds. Default: **86400**. |
+| **WSNIC_DHCP_DOMAIN_NAME**        | Domain Name of this subnet. Optioal, default: *undefined*. |
+| **WSNIC_DHCP_DOMAIN_NAME_SERVER** | Comma-separated list of DNS IP addresses, defaults to bridge address (dnsmasq) if undefined. Optioal, default: *undefined*. |
 
 Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
 
-An optional TLS server certificate file (and its optional key file) must be volume mounted into to the image, at startup wsnic looks for them at these fixed file paths in the Docker file system:
+An optional TLS server certificate file (and its optional key file) must be volume mounted into the image, at startup wsnic looks for them at these fixed file paths in the Docker file system:
 
 * `/opt/wsnic/cert/cert.crt`
 * `/opt/wsnic/cert/cert.key`
@@ -48,7 +48,6 @@ A full example to illustrate these options:
 ```bash
 sudo docker run --rm --interactive --tty \
     -e WSNIC_ENABLE_HOSTNET=1 \
-    -e WSNIC_DHCP_DOMAIN_NAME=v86.local \
     -v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt \
     -v /var/local/crt/cert.key:/opt/wsnic/cert/cert.key \
     -p 8086:80 \
@@ -88,7 +87,7 @@ To use wsnic without Docker you can execute wsnic directly from its source code.
 
 Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
-#### Step 1/3: Install required Linux tools
+#### Step 1/2: Install required Linux tools
 
 First, make sure that the packages required by wsnic are installed, for Debian:
 
@@ -105,7 +104,7 @@ sudo systemctl disable dnsmasq
 
 stunnel is only required for `wss://` support and otherwise not needed.
 
-#### Step 2/3: Clone and initialize repository
+#### Step 2/2: Clone and initialize repository
 
 Clone a working copy of this repository. Then, install `websockets` into the working copy using `pip`:
 
@@ -118,19 +117,30 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-#### Step 3/3: Configuration
+Set up your `wsnic.conf` as described in the next section.
 
-Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
+### Configuring wsnic with wsnic.conf
 
-* `subnet`, the IP subnet that wsnic will use, it defaults to `192.168.86.0/24` which might conflict with your local network configuration and must then be changed accordingly
-* `inet_iface`, set this to the name of a physical network device that can route internet traffic (usually similar to `eth0` or `enp0s3`) to provide Internet access to WebSocket clients
-* `wss_server_cert`, PEM formatted TLS server certificate file required for `wss://` support (and its optional key file `wss_server_key`)
+Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed. Options available in wsnic.conf:
 
-Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in `wsnic.conf`.
+| Option | Description |
+| :--- | :--- |
+| **ws_server_addr**          | WebSocket server address, use `127.0.0.1` if wsnic runs on the same machine as the WebSocket client (browser), or `0.0.0.0` to make wsnic available in the network. Default: **127.0.0.1**. |
+| **ws_server_port**          | WebSocket server port (ws://). Default: **8086**. |
+| **wss_server_port**         | WebSocket Secure server port (wss://). Default: **8087**. |
+| **wss_server_cert**         | Absolute path of a PEM formatted file containing either just the public server certificate or an entire certificate chain including public key, private key, and root certificates. Optional, default: *undefined*. |
+| **wss_server_key**          | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
+| **inet_iface**              | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
+| **subnet**                  | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
+| **dhcp_service**            | DHCP service provider, either `dnsmasq` or `disabled`. Default: **dnsmasq**. |
+| **dhcp_lease_file**         | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*. |
+| **dhcp_lease_time**         | DHCP lease time in seconds. Default: **86400** (24 hours). |
+| **dhcp_domain_name**        | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
+| **dhcp_domain_name_server** | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DHCP server address.<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
 
 ### Using wsnic from sources
 
-Start `wsnic` using:
+Run `wsnic` using:
  
 ```bash
 sudo ./wsnic.sh
