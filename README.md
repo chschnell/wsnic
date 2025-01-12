@@ -2,20 +2,20 @@
 
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
-* supports attaching the bridge to a physical network device using Network Address Translation (NAT) to grant Internet-access to WebSocket clients
+* supports attaching the bridge to a physical network device using Network Address Translation (NAT) to grant Internet-access to WebSocket guests
 * uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * supports WebSockets Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
-* uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP and DNS services to WebSocket clients
+* uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP and DNS services to WebSocket guests
 * uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and network devices
 * sends periodic PINGs to idle WebSocket clients
 
-## Building and using the wsnic Docker image
+## Building and using the Docker image
 
-### How to build the wsnic Docker container
+### Building the wsnic Docker container
 
 Follow the [Docker build instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
 
-Build Docker container with tag `wsnic:latest` using:
+Build the wsnic Docker container with tag `wsnic:latest` using:
 
 ```bash
 sudo docker buildx build -t wsnic:latest -f docker/Dockerfile .
@@ -80,11 +80,15 @@ Arguments:
 * **--sysctl net.ipv4.ip_forward=1**  
    allow IP forwarding in the Docker image
 
-## How to build wsnic from the sources
+## Installing and using wsnic from sources
+
+To use wsnic without Docker you can execute wsnic directly from its source code.
+
+### Installing wsnic from sources
 
 Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
 
-### Step 1/3: Install required Linux tools
+#### Step 1/3: Install required Linux tools
 
 First, make sure that the packages required by wsnic are installed, for Debian:
 
@@ -101,7 +105,7 @@ sudo systemctl disable dnsmasq
 
 stunnel is only required for `wss://` support and otherwise not needed.
 
-### Step 2/3: Clone and initialize this repository
+#### Step 2/3: Clone and initialize repository
 
 Clone a working copy of this repository. Then, install `websockets` into the working copy using `pip`:
 
@@ -114,7 +118,7 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-### Step 3/3: Installation setup
+#### Step 3/3: Configuration
 
 Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed, settings to consider:
 
@@ -124,7 +128,7 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 
 Note that the values defined in `wsnic.conf.template` are the respective default values for settings left unspecified in `wsnic.conf`.
 
-## Usage
+### Using wsnic from sources
 
 Start `wsnic` using:
  
