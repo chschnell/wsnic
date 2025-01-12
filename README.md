@@ -32,7 +32,7 @@ There are several environment variables, TCP port numbers and files that can be 
 | **WSNIC_ENABLE_DHCP**             | `1`               | If set to `0`, disable DHCP server dnsmasq for WebSocket guests |
 | **WSNIC_DHCP_LEASE_TIME**         | `86400`           | DHCP lease time in seconds |
 | **WSNIC_DHCP_DOMAIN_NAME**        |                   | An optional local domain name for the subnet |
-| **WSNIC_DHCP_DOMAIN_NAME_SERVER** |                   | A comma-separated list of DNS IP addresses, use dnsmasq if undefined |
+| **WSNIC_DHCP_DOMAIN_NAME_SERVER** |                   | An optional, comma-separated list of DNS IP addresses, defaults to dnsmasq if undefined |
 
 Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
 
@@ -61,14 +61,14 @@ sudo docker run --rm --interactive --tty \
 
 Arguments:
 
-* `--rm` -- remove Docker image when closing
-* `--interactive` -- keep STDIN open
-* `--tty` -- allocate a pseudo-TTY
-* `-e WSNIC_ENABLE_HOSTNET=1` -- set environment variable WSNIC_ENABLE_HOSTNET to `1`
-* `-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt`  -- mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
-* `-p 8086:80` -- map internal Docker TCP port 80 to host's TCP port 8086
-* `--cap-add=NET_ADMIN` -- allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
-* `--device /dev/net/tun:/dev/net/tun` -- map the TUN device from host into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
+* **--rm** -- remove Docker image when closing
+* **--interactive** -- keep STDIN open
+* **--tty** -- allocate a pseudo-TTY
+* **-e WSNIC_ENABLE_HOSTNET=1** -- set environment variable WSNIC_ENABLE_HOSTNET to `1`
+* **-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt**  -- mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
+* **-p 8086:80** -- map internal Docker TCP port 80 to host's TCP port 8086
+* **--cap-add=NET_ADMIN** -- allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
+* **--device /dev/net/tun:/dev/net/tun** -- map the TUN device from host into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
 * `--sysctl net.ipv4.ip_forward=1` -- allow IP forwarding in the Docker image
 
 ## How to build wsnic from the sources
