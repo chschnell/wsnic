@@ -149,6 +149,8 @@ Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPT
 
 wsnic supports configuration through its command line interface (CLI) and optionally by using a configuration file. Each setting in the configuration file corresponds to a CLI option (for example, CLI option `--foo-bar` corresponds to config setting `foo_bar`). Copy template file [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` for a quick-start if you want to use a configuration file.
 
+Options specified on the command line take precedence over those specified in `wsnic.conf`.
+
 Command line interface of wsnic:
 
 ```
