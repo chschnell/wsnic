@@ -25,24 +25,26 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 
 ## Docker installation
 
-Either install the Docker container from Docker Hub or build it yourself. In either case, follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
+First, follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
+
+Next, either install the Docker container from Docker Hub or build it yourself.
 
 ### Install from Docker Hub
 
-*TODO*
+Pull the wsnic Docker container from Docker Hub using:
+
+```bash
+docker pull chschnell86/wsnic:latest
+```
 
 ### Build Docker container
 
-Clone this repository using:
+Clone this repository and build wsnic Docker container with example tag `wsnic:local` using:
 
 ```bash
 git clone https://github.com/chschnell/wsnic.git
 cd wsnic
-```
 
-Build the wsnic Docker container with example tag `wsnic:local` using:
-
-```bash
 docker buildx build -t wsnic:local .
 ```
 
