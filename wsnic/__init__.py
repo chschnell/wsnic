@@ -105,8 +105,8 @@ class Exec:
     def __call__(self, cmdline, check=None):
         if isinstance(cmdline, str):
             cmdline = cmdline.split(' ')
-        if self.logger.isEnabledFor(logging.INFO):
-            self.logger.info(f'$ {" ".join(cmdline)}')
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(f'$ {" ".join(cmdline)}')
         subprocess.run(cmdline, check=self.check if check is None else check)
 
 class Pollable:
