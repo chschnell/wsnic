@@ -39,7 +39,6 @@ class Dnsmasq:
             self.lease_file.close()
             cmdline.append(f'--dhcp-leasefile={self.lease_file.name}')
 
-
         log_cmdline = ''
         if logger.isEnabledFor(logging.DEBUG):
             log_cmdline = f': {" ".join(cmdline)}'
