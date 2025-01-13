@@ -18,7 +18,7 @@ Follow the official [Docker installation instructions](https://docs.docker.com/e
 Build the wsnic Docker container with tag `wsnic:local` using:
 
 ```bash
-sudo docker buildx build -t wsnic:local -f docker/Dockerfile .
+sudo docker buildx build -t wsnic:local .
 ```
 
 ### Using the wsnic Docker image

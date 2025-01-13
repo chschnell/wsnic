@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG PYTHON_VERSION=3.11.4
+ARG PYTHON_VERSION=3.13
 FROM python:${PYTHON_VERSION}-slim AS base
 
 LABEL org.opencontainers.image.authors="christian.d.schnell@gmail.com"
@@ -25,7 +25,7 @@ RUN apt-get update && \
 # Leverage a bind mount to requirements.txt to avoid having to copy them into
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=docker/requirements.txt,target=requirements.txt \
+    --mount=type=bind,source=requirements.txt,target=requirements.txt \
     python -m pip install -r requirements.txt
 
 # Copy Python source code into the container.
