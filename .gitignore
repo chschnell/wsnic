@@ -1,4 +1,4 @@
 __pycache__/
 venv/
+cert/
 wsnic.conf
-dnsmasq.leases
