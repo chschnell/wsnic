@@ -47,7 +47,7 @@ class WsnicConfig:
         wsnic_conf = args.wsnic_conf
         if wsnic_conf:
             if not os.path.isfile(wsnic_conf):
-                logger.warning(f'{wsnic_conf}: configuration file not found, using defaults')
+                logger.warning(f'{wsnic_conf}: configuration file not found, using defaults!')
                 wsnic_conf = None
         elif os.path.isfile('wsnic.conf'):
             wsnic_conf = 'wsnic.conf'
@@ -61,7 +61,7 @@ class WsnicConfig:
                 if hasattr(self, opt_name):
                     setattr(self, opt_name, parse_option(opt_name, opt_value))
                 else:
-                    logger.warning(f'{wsnic_conf}: unknown option "{opt_name}" ignored')
+                    logger.warning(f'{wsnic_conf}: unknown option "{opt_name}" ignored!')
 
         ## parse and apply command line arguments
         for opt_name, opt_value in args.__dict__.items():
@@ -80,14 +80,25 @@ class WsnicConfig:
             if is_docker_env:
                 self.inet_iface = 'eth0'
             else:
-                logger.warning(f'enable_inet: failed, missing unspecified option "inet_iface"')
+                logger.warning(f'enable_inet: failed, missing unspecified option "inet_iface"!')
                 self.enable_inet = False
 
-        ## set wss certificate and key default values
-        if self.wss_certificate is None and os.path.isfile('cert/cert.crt'):
-            self.wss_certificate = os.path.abspath('cert/cert.crt')
-        if self.wss_private_key is None and os.path.isfile('cert/cert.key'):
-            self.wss_private_key = os.path.abspath('cert/cert.key')
+        ## set wss certificate default value
+        if self.wss_certificate is None:
+            if os.path.isfile('cert/cert.crt'):
+                self.wss_certificate = os.path.abspath('cert/cert.crt')
+        elif not os.path.isfile(self.wss_certificate):
+            logger.warning(f'{self.wss_certificate}: certificate file not found, wss disabled!')
+            self.wss_certificate = None
+
+        ## set wss private key default value
+        if self.wss_private_key is None:
+            if os.path.isfile('cert/cert.key'):
+                self.wss_private_key = os.path.abspath('cert/cert.key')
+        elif not os.path.isfile(self.wss_private_key):
+            logger.warning(f'{self.wss_private_key}: private key file not found, wss disabled!')
+            self.wss_certificate = None
+            self.wss_private_key = None
 
         ## derive network settings dynamically from self.subnet:
         ip_subnet = ipaddress.ip_network(self.subnet)
