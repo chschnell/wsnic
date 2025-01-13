@@ -53,7 +53,11 @@ class StunnelProxyServer:
 
         ## execute stunnel
         stunnel_cmdline = ['stunnel', self.stunnel_conf.name]
-        logger.info(f'start child process: {" ".join(stunnel_cmdline)}')
+
+        log_cmdline = ''
+        if logger.isEnabledFor(logging.DEBUG):
+            log_cmdline = f': {" ".join(stunnel_cmdline)}'
+        logger.info(f'{self.config.ws_address}:{self.config.wss_port}: starting stunnel child process{log_cmdline}')
         self.stunnel_p = subprocess.Popen(stunnel_cmdline)
 
     def close(self):

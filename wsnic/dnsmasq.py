@@ -39,7 +39,11 @@ class Dnsmasq:
             self.lease_file.close()
             cmdline.append(f'--dhcp-leasefile={self.lease_file.name}')
 
-        logger.info(f'start child process: {" ".join(cmdline)}')
+
+        log_cmdline = ''
+        if logger.isEnabledFor(logging.DEBUG):
+            log_cmdline = f': {" ".join(cmdline)}'
+        logger.info(f'{self.config.server_addr}: starting dnsmasq child process{log_cmdline}')
         self.dnsmasq_p = subprocess.Popen(cmdline)
 
     def close(self):
