@@ -4,7 +4,6 @@
 ##
 
 import os, re, logging, configparser, argparse, time, ipaddress, select, shutil
-import logging.handlers
 
 from wsnic import sysctl
 from wsnic.websock import WebSocketServer
@@ -14,7 +13,7 @@ from wsnic.nbe_brtap import BridgedTapNetworkBackend
 logger = logging.getLogger('main')
 
 class WsnicConfig:
-    def __init__(self, conf_filename, log_level, use_syslog, docker_mode):
+    def __init__(self, conf_filename, docker_mode):
         ## option defaults
         self.ws_server_addr = '127.0.0.1'   ## str, WebSocket server and stunnel bind address
         self.ws_server_port = 8086          ## int, WebSocket server port (ws://)
@@ -23,7 +22,7 @@ class WsnicConfig:
         self.wss_server_key = None          ## str, PEM encoded private key file, optional
         self.inet_iface = None              ## str, name of an interface that provides Internet access
         self.subnet = '192.168.86.0/24'     ## str, defines bridge IP, gateway and DHCP server
-        self.dhcp_service = 'dnsmasq'       ## str, "dnsmasq": use dnsmasq, anything else: disable DHCP
+        self.dhcp_enabled = True            ## str, "dnsmasq": use dnsmasq, anything else: disable DHCP
         self.dhcp_lease_file = None         ## str, DHCP lease database file, use temp file if undefined
         self.dhcp_lease_time = 86400        ## int, DHCP lease time in seconds
         self.dhcp_domain_name = None        ## str, local domain name announced in DHCP replies
@@ -44,7 +43,7 @@ class WsnicConfig:
             if 'WSNIC_ENABLE_HOSTNET' in os.environ and os.environ['WSNIC_ENABLE_HOSTNET'] == '1':
                 self.inet_iface = 'eth0'
             if 'WSNIC_ENABLE_DHCP' in os.environ and os.environ['WSNIC_ENABLE_DHCP'] != '1':
-                self.dhcp_service = None
+                self.dhcp_enabled = True
             if 'WSNIC_DHCP_LEASE_TIME' in os.environ and os.environ['WSNIC_DHCP_LEASE_TIME'].isdigit():
                 self.dhcp_lease_time = int(os.environ['WSNIC_DHCP_LEASE_TIME'])
             if 'WSNIC_DHCP_DOMAIN_NAME' in os.environ and os.environ['WSNIC_DHCP_DOMAIN_NAME']:
@@ -70,6 +69,8 @@ class WsnicConfig:
                     else:
                         logger.warning(f'{conf_filename}: unknown option "{opt_name}" ignored')
 
+        self.docker_mode = docker_mode
+
         ## derive network settings dynamically from self.subnet:
         ip_subnet = ipaddress.ip_network(self.subnet)
         hosts = ip_subnet.hosts()
@@ -81,9 +82,6 @@ class WsnicConfig:
         ## use server_addr for DNS server as default
         if not self.dhcp_nameserver:
             self.dhcp_nameserver = [self.server_addr]
-
-        self.log_level = log_level
-        self.use_syslog = use_syslog
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
@@ -172,7 +170,6 @@ def main():
         default='wsnic.conf', dest='conf', metavar='CONF_FILE')
     parser.add_argument('-v', help='output verbose log messages', action='store_true', dest='verbose')
     parser.add_argument('-q', help='output warning and error log messages only', action='store_true', dest='quiet')
-    parser.add_argument('--use-syslog', help='send log messages to syslog', action='store_true')
     parser.add_argument('--docker-mode', help='use Docker configuration method', action='store_true')
     args = parser.parse_args()
 
@@ -184,14 +181,7 @@ def main():
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
     logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
 
-    if args.use_syslog:
-        ## replace the default STDERR-handler with SysLogHandler handler
-        handler = logging.handlers.SysLogHandler(address='/dev/log')
-        root_logger = logging.getLogger(None)
-        root_logger.removeHandler(root_logger.handlers[0])
-        root_logger.addHandler(handler)
-
-    config = WsnicConfig(args.conf, log_level, args.use_syslog, args.docker_mode)
+    config = WsnicConfig(args.conf, args.docker_mode)
 
     if os.geteuid() != 0:
         print(f'error: must be run by root')
@@ -202,7 +192,7 @@ def main():
     elif shutil.which('iptables') is None:
         print(f'iptables: file not found (Debian: install apt package iptables)')
         return
-    elif config.dhcp_service == 'dnsmasq' and shutil.which('dnsmasq') is None:
+    elif config.dhcp_enabled and shutil.which('dnsmasq') is None:
         print(f'dnsmasq: file not found (Debian: install apt package dnsmasq)')
         return
 
