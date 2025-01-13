@@ -296,7 +296,7 @@ Overview of wsnic and its network components:
  +--+--+     +--+--+         +--+--+
     |           |               |
 +===+===========+===============+====+
-|   :           :               :    |  (wsnic WebSocket server)
+|   :           :               :    |  (wsnic proxy server)
 +===+===========+===============+====+
     |           |               |
 +---+----+  +---+----+      +---+----+
