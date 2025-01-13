@@ -79,7 +79,7 @@ In order to pass files (`cert.crt`, `cert.key` or `wsnic.conf`) from the host in
 * `/opt/wsnic/cert/cert.crt` for the server certificate file
 * `/opt/wsnic/cert/cert.key` for the private key file
 
-Full example (replace `/host/path` accordingly):
+Full example (replace `/host/path` with the absolute file path in your local environment):
 
 ```bash
 docker run -rm --interactive --tty \
@@ -93,7 +93,55 @@ docker run -rm --interactive --tty \
     wsnic:local [WSNIC-OPTIONS]
 ```
 
-See section [CLI options](#cli-options) for documentation on `WSNIC-OPTIONS` (or use `-h`).
+Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
+
+## Source installation
+
+To use wsnic without Docker you can execute wsnic directly from its source code as described below. Instructions are tested with Debian 12 (Bookworm) netinst (without Desktop).
+
+> [!WARNING]
+> Unlike the Docker image this installation method will run directly on the
+> host, meaning it is **not isolated** from the host as is the case with Docker.
+> It is recommended to use this installation method only in a **virtual machine**
+> dedicated for this purpose in order to avoid unwanted system modifications in
+> case of a crash.
+>
+> Having said that, wsnic attempts to restore all system state back as it was
+> before starting, for example the host's network configuration and settings.
+
+First, make sure that the packages required by wsnic are installed:
+
+```bash
+sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
+```
+
+Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
+
+```bash
+sudo systemctl stop dnsmasq
+sudo systemctl disable dnsmasq
+```
+
+NOTE: `stunnel` is only required for `wss://` support and otherwise not needed.
+
+Next, clone a working copy of this repository and install `websockets` into it using `pip`:
+
+```bash
+git clone https://github.com/chschnell/wsnic.git
+
+cd wsnic
+python3 -m venv venv
+venv/bin/pip3 install websockets
+cd ..
+```
+
+Finally, run wsnic using:
+
+```bash
+sudo ./wsnic.sh [WSNIC-OPTIONS]
+```
+
+Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
 
 ## CLI options
 
@@ -176,54 +224,6 @@ options:
           address (which gets handled by dnsmasq).
           Optional, default: undefined.
 ```
-
-## Source installation
-
-> [!WARNING]
-> Unlike the Docker image this installation method will run directly on the
-> host, meaning it is **not isolated** from the host as is the case with Docker.
-> It is recommended to use this installation method only in a **virtual machine**
-> dedicated for this purpose in order to avoid unwanted system modifications in
-> case of a crash.
->
-> Having said that, wsnic attempts to restore all system state back as it was
-> before starting, for example the host's network configuration and settings.
-
-To use wsnic without Docker you can execute wsnic directly from its source code. Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
-
-First, make sure that the packages required by wsnic are installed:
-
-```bash
-sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
-```
-
-Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
-
-```bash
-sudo systemctl stop dnsmasq
-sudo systemctl disable dnsmasq
-```
-
-NOTE: `stunnel` is only required for `wss://` support and otherwise not needed.
-
-Next, clone a working copy of this repository and install `websockets` into it using `pip`:
-
-```bash
-git clone https://github.com/chschnell/wsnic.git
-
-cd wsnic
-python3 -m venv venv
-venv/bin/pip3 install websockets
-cd ..
-```
-
-Finally, run wsnic using:
- 
-```bash
-sudo ./wsnic.sh [WSNIC-OPTIONS]
-```
-
-See section [CLI options](#cli-options) for documentation on `WSNIC-OPTIONS` (or use `-h`).
 
 ## WebSocket Secure support
 
