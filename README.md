@@ -50,7 +50,7 @@ docker buildx build -t wsnic:local .
 
 ### How to use the Docker image
 
-wsnic requires the following `docker run` command line arguments to be present:
+wsnic requires the following `docker run` command line arguments to be present (replace `chschnell86/wsnic:latest` with `wsnic:local` when using a self-build container):
 
 ```bash
 docker run \
@@ -59,7 +59,7 @@ docker run \
     --sysctl net.ipv4.ip_forward=1 \
     -p 8086:8086 \
     -p 8087:8087 \
-    wsnic:local [WSNIC-OPTIONS]
+    chschnell86/wsnic:latest [WSNIC-OPTIONS]
 ```
 
 Brief description for each of these arguments, and why they're needed:
@@ -81,7 +81,7 @@ In order to pass files (`cert.crt`, `cert.key` or `wsnic.conf`) from the host in
 * `/opt/wsnic/cert/cert.crt` for the server certificate file
 * `/opt/wsnic/cert/cert.key` for the private key file
 
-Full example (replace `/host/path` with the absolute file path in your local environment):
+Full example (replace `/host/path` with the absolute file path in your local environment, and if using a self-build container `chschnell86/wsnic:latest` with `wsnic:local`):
 
 ```bash
 docker run -rm --interactive --tty \
@@ -92,7 +92,7 @@ docker run -rm --interactive --tty \
     -p 8087:8087 \
     -v /host/path/cert.crt:/opt/wsnic/cert/cert.crt \
     -v /host/path/cert.key:/opt/wsnic/cert/cert.key \
-    wsnic:local [WSNIC-OPTIONS]
+    chschnell86/wsnic:latest [WSNIC-OPTIONS]
 ```
 
 Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
