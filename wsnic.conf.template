@@ -43,9 +43,9 @@ inet_iface=
 subnet=192.168.86.0/24
 
 #
-# DHCP service provider: either "dnsmasq" or "disabled".
+# Enable DHCP/DNS service dnsmasq: either "0" (disabled) or "1" (enabled).
 #
-dhcp_service=dnsmasq
+dhcp_enabled=1
 
 #
 # DHCP lease database file (optional, a temp file is used if undefined).

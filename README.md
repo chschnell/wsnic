@@ -132,7 +132,7 @@ Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as 
 | **wss_server_key** | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
 | **inet_iface** | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
 | **<span id="conf_subnet"></span>subnet** | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
-| **dhcp_service** | DHCP service provider, either `dnsmasq` or `disabled`. Default: **dnsmasq**. |
+| **dhcp_enabled** | Enable DHCP/DNS service dnsmasq: either "0" (disabled) or "1" (enabled). Default: **1**. |
 | **dhcp_lease_file** | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*. |
 | **<span id="conf_dhcp_lease_time"></span>dhcp_lease_time** | DHCP lease time in seconds. Default: **86400** (24 hours). |
 | **<span id="conf_dhcp_domain_name"></span>dhcp_domain_name** | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
@@ -150,7 +150,7 @@ Command line options:
 
 ```
 $ ./wsnic.sh -h
-usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v] [-q] [--use-syslog] [--docker-mode]
+usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v] [-q] [--docker-mode]
 
 WebSocket to virtual network device proxy server.
 
@@ -160,7 +160,6 @@ options:
   -c CONF_FILE   use configuration file CONF_FILE (default: wsnic.conf)
   -v             output verbose log messages
   -q             output warning and error log messages only
-  --use-syslog   send log messages to syslog
   --docker-mode  use Docker configuration method
 ```
 
