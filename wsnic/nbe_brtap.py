@@ -50,7 +50,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         logger.info(f'created bridge {self.br_iface}')
 
         ## install DHCP server on bridge interface
-        if self.config.dhcp_enabled:
+        if not self.config.disable_dhcp:
             self.dhcp_server = Dnsmasq(self.server)
             self.dhcp_server.open(self.br_iface)
 

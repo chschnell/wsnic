@@ -1,95 +1,197 @@
 **wsnic** is a WebSocket to virtual network proxy server for Linux.
 
+## Overview
+
+There are two methods available to install wsnic, see
+
+* **[Docker installation](#docker-installation)** about installing wsnic with Docker, and
+* **[Source installation](#source-installation)** about installing wsnic without it.
+
+In either case, see section **[CLI options](#cli-options)** next about wsnic's command line interface for configuration options.
+
+For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#websocket-secure-support)**.
+
+**Features**
+
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network device using Network Address Translation (NAT) to grant Internet-access to WebSocket guests
 * uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
-* supports WebSockets Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
+* supports WebSocket Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
 * uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP and DNS services to WebSocket guests
 * uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and network devices
 * sends periodic PINGs to idle WebSocket clients
+* see section [How it works](#how-it-works) for more details
 
-## Building and using the Docker image
+## Docker installation
 
-### Building the wsnic Docker container
+Either install the Docker container from Docker Hub or build it yourself. In either case, follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
 
-Follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
+### Install from Docker Hub
 
-Build the wsnic Docker container with tag `wsnic:local` using:
+*TODO*
+
+### Build Docker container
+
+Clone this repository using:
 
 ```bash
-sudo docker buildx build -t wsnic:local .
+git clone https://github.com/chschnell/wsnic.git
+cd wsnic
 ```
 
-### Using the wsnic Docker image
-
-There are several environment variables, TCP port numbers and files that can be specified on the `docker run` command line for customization.
-
-| Docker environment variable | Description |
-| :---- | :--- |
-| **WSNIC_SUBNET**           | The subnet that wsnic will use, see option [`subnet`](#conf_subnet) for details. |
-| **WSNIC_ENABLE_HOSTNET**   | If set to `1`, grant WebSocket guests access to the host's network (and Internet, if available). Default: **0**. |
-| **WSNIC_ENABLE_DHCP**      | If set to `0`, disable DHCP server dnsmasq for WebSocket guests. Default: **1**. |
-| **WSNIC_DHCP_LEASE_TIME**  | DHCP lease time, see option [`dhcp_lease_time`](#conf_dhcp_lease_time) for details. |
-| **WSNIC_DHCP_DOMAIN_NAME** | Domain Name of this subnet, see option [`dhcp_domain_name`](#conf_dhcp_domain_name) for details. |
-| **WSNIC_DHCP_NAMESERVER**  | List of DNS IP addresses, see option [`dhcp_nameserver`](#conf_dhcp_nameserver) for details. |
-
-Internally, the wsnic Docker image listens on TCP port numbers 80 (ws://) and 443 (wss://), these can be overriden simply with the `-p` command line argument.
-
-An optional TLS server certificate file (and its optional key file) must be volume mounted into the image, at startup wsnic looks for them at these fixed file paths in the Docker file system:
-
-* `/opt/wsnic/cert/cert.crt`
-* `/opt/wsnic/cert/cert.key`
-
-TLS support in wsnic is only enabled if a valid TLS certificate has been found.
-
-A full example to illustrate these options:
+Build the wsnic Docker container with example tag `wsnic:local` using:
 
 ```bash
-sudo docker run --rm --interactive --tty \
-    -e WSNIC_ENABLE_HOSTNET=1 \
-    -v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt \
-    -v /var/local/crt/cert.key:/opt/wsnic/cert/cert.key \
-    -p 8086:80 \
-    -p 8087:443 \
+docker buildx build -t wsnic:local .
+```
+
+### How to use the Docker image
+
+wsnic requires the following `docker run` command line arguments to be present:
+
+```bash
+docker run \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
     --sysctl net.ipv4.ip_forward=1 \
-    wsnic:local
+    -p 8086:8086 \
+    -p 8087:8087 \
+    wsnic:local [WSNIC-OPTIONS]
 ```
 
-Arguments:
+Brief description for each of these arguments, and why they're needed:
 
-* **--rm**  
-   remove Docker image when closing
-* **--interactive**  
-   keep STDIN open
-* **--tty**  
-   allocate a pseudo-TTY
-* **-e WSNIC_ENABLE_HOSTNET=1**  
-   set environment variable WSNIC_ENABLE_HOSTNET to `1`
-* **-v /var/local/crt/cert.crt:/opt/wsnic/cert/cert.crt**  
-   mount file `/var/local/crt/cert.crt` from host file system into Docker image at `/opt/wsnic/cert/cert.crt`
-* **-p 8086:80**  
-   map internal Docker TCP port 80 to host's TCP port 8086
 * **--cap-add=NET_ADMIN**  
-   allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices
+   Allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices.
 * **--device /dev/net/tun:/dev/net/tun**  
-   map host's TUN device file into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images
+   Map host's TUN device file into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images.
 * **--sysctl net.ipv4.ip_forward=1**  
-   allow IP forwarding in the Docker image
+   Allow IP forwarding in the Docker image (maybe not needed).
+* **-p 8086:8086**  
+   Maps the WebSocket (ws://) port number `<host-port>:<docker-port>` to host port 8086, for example `12345:8086` would instead expose wsnic on the host's port 12345.
+* **-p 8087:8087**  
+   Maps the WebSocket Secure (wss://) port number to host port 8087, only needed when wss is used.
 
-## Installing and using wsnic from sources
+In order to pass files (`cert.crt`, `cert.key` or `wsnic.conf`) from the host into the Docker image they need to be volume mounted using Docker command line option `-v`. At startup, wsnic checks for these files at fixed paths:
 
-To use wsnic without Docker you can execute wsnic directly from its source code.
+* `/opt/wsnic/wsnic.conf` for the wsnic configuration file
+* `/opt/wsnic/cert/cert.crt` for the server certificate file
+* `/opt/wsnic/cert/cert.key` for the private key file
 
-### Installing wsnic from sources
+Full example (replace `/host/path` accordingly):
 
-Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
+```bash
+docker run -rm --interactive --tty \
+    --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    --sysctl net.ipv4.ip_forward=1 \
+    -p 8086:8086 \
+    -p 8087:8087 \
+    -v /host/path/cert.crt:/opt/wsnic/cert/cert.crt \
+    -v /host/path/cert.key:/opt/wsnic/cert/cert.key \
+    wsnic:local [WSNIC-OPTIONS]
+```
 
-#### Step 1/2: Install required Linux tools
+See section [CLI options](#cli-options) for documentation on `WSNIC-OPTIONS` (or use `-h`).
 
-First, make sure that the packages required by wsnic are installed, for Debian:
+## CLI options
+
+wsnic supports configuration through its command line interface (CLI) and optionally by using a configuration file. Each setting in the configuration file corresponds to a CLI option (for example, CLI option `--foo-bar` corresponds to config setting `foo_bar`). Copy template file [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` for a quick-start if you want to use a configuration file.
+
+Command line interface of wsnic:
+
+```
+usage: wsnic [-h] [-v] [-q] [-c CFGFILE] [-a ADDR] [--ws-port PORT]
+             [--wss-port PORT] [-r CRTFILE] [-k KEYFILE] [-s NETWORK]
+             [-i] [-f IFACE] [--disable-dhcp] [--dhcp-lease-file DBFILE]
+             [-t SECONDS] [-n NAME] [-d IPLIST]
+
+WebSocket to virtual network device proxy server.
+
+options:
+    -h, --help
+          show this help message and exit
+    -v    Output verbose log messages.
+    -q    Output warning and error log messages only.
+    -c CFGFILE
+          Use configuration file CFGFILE, default: wsnic.conf (if
+          exists).
+    -a ADDR, --ws-address ADDR
+          WebSocket server address.
+          Use 127.0.0.1 if wsnic runs on the same machine as the
+          WebSocket client (browser), or 0.0.0.0 to make wsnic
+          available in the network.
+          Default: 0.0.0.0 under Docker or 127.0.0.1.
+    --ws-port PORT
+          WebSocket server port (ws://), default: 8086.
+    --wss-port PORT
+          WebSocket Secure server port (wss://), default: 8087.
+    -r CRTFILE, --wss-certificate CRTFILE
+          Absolute path of a PEM formatted file containing either just
+          the public server certificate or an entire certificate chain
+          including public key, private key, and root certificates.
+          Optional, default: "cert/cert.crt" (if exists).
+    -k KEYFILE, --wss-private-key KEYFILE
+          Absolute path of a PEM formatted file containing only the
+          private key of the server certificate.
+          Optional, default: "cert/cert.key" (if exists).
+    -s NETWORK, --subnet NETWORK
+          The wsnic subnet in CIDR notation, default: 192.168.86.0/24.
+          The subnet's first and last IP addresses are reserved for
+          network and broadcast addresses. The subnet's second IP is
+          reserved for the bridge device (also gateway and DHCP server
+          IP). The remaining IP addresses are used for the DHCP
+          address pool.
+          Example for the default subnet:
+          - Network address: 192.168.86.0
+          - Broadcast address: 192.168.86.255
+          - Bridge/gateway/DHCPD address: 192.168.86.1
+          - DHCP address pool: 192.168.86.2 ... 192.168.86.254
+          The default subnet might conflict with your local network
+          configuration and must then be changed accordingly.
+    -i, --enable-inet
+          Grant bridge access to the host's network (including
+          Internet if available) using inet_iface.
+    -f IFACE, ---inet-iface IFACE
+          Interface name of a physical network device that provides
+          access to the Internet (for example "eth0" or "enp0s3").
+          Optional, default: "eth0" under Docker or undefined.
+    --disable-dhcp
+          Disable DHCP/DNS service using dnsmasq.
+    --dhcp-lease-file DBFILE
+          DHCP lease database file path, default: undefined.
+          If undefined, wsnic uses a temporary file which will be
+          deleted on close.
+    -t SECONDS, ---dhcp-lease-time SECONDS
+          DHCP lease time in seconds, default: 86400 (24 hours).
+    -n NAME, ---dhcp-domain-name NAME
+          Domain Name of this subnet published in DHCP replies.
+          Optional, default: undefined.
+    -d IPLIST, --dhcp-nameserver IPLIST
+          Comma-separated list of Domain Name Server (DNS) IP
+          address(es) published in DHCP replies, for example:
+              "8.8.8.8, 8.8.4.4"
+          If undefined, the bridge's IP address is used as the DNS
+          address (which gets handled by dnsmasq).
+          Optional, default: undefined.
+```
+
+## Source installation
+
+> [!WARNING]
+> Unlike the Docker image this installation method will run directly on the
+> host, meaning it is **not isolated** from the host as is the case with Docker.
+> It is recommended to use this installation method only in a **virtual machine**
+> dedicated for this purpose in order to avoid unwanted system modifications in
+> case of a crash.
+>
+> Having said that, wsnic attempts to restore all system state back as it was
+> before starting, for example the host's network configuration and settings.
+
+To use wsnic without Docker you can execute wsnic directly from its source code. Instructions below are tested with Debian 12 (Bookworm) netinst (without Desktop).
+
+First, make sure that the packages required by wsnic are installed:
 
 ```bash
 sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
@@ -102,11 +204,9 @@ sudo systemctl stop dnsmasq
 sudo systemctl disable dnsmasq
 ```
 
-stunnel is only required for `wss://` support and otherwise not needed.
+NOTE: `stunnel` is only required for `wss://` support and otherwise not needed.
 
-#### Step 2/2: Clone and initialize repository
-
-Clone a working copy of this repository. Then, install `websockets` into the working copy using `pip`:
+Next, clone a working copy of this repository and install `websockets` into it using `pip`:
 
 ```bash
 git clone https://github.com/chschnell/wsnic.git
@@ -117,73 +217,28 @@ venv/bin/pip3 install websockets
 cd ..
 ```
 
-Set up your `wsnic.conf` as described in the next section.
-
-### Configuring wsnic with wsnic.conf
-
-Copy [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` and edit as needed. Options available in wsnic.conf:
-
-| Option | Description |
-| :--- | :--- |
-| **ws_server_addr** | WebSocket server address, use `127.0.0.1` if wsnic runs on the same machine as the WebSocket client (browser), or `0.0.0.0` to make wsnic available in the network. Default: **127.0.0.1**. |
-| **ws_server_port** | WebSocket server port (ws://). Default: **8086**. |
-| **wss_server_port** | WebSocket Secure server port (wss://). Default: **8087**. |
-| **wss_server_cert** | Absolute path of a PEM formatted file containing either just the public server certificate or an entire certificate chain including public key, private key, and root certificates. Optional, default: *undefined*. |
-| **wss_server_key** | Absolute path of a PEM formatted file containing the private-key of the server certificate only. Optional, default: *undefined*. |
-| **inet_iface** | Interface name of a physical network device that provides access to the Internet (for example `eth0` or `enp0s3`). If defined, wsnic installs temporary NAT rules for the bridge and this device. Optional, default: *undefined*. |
-| **<span id="conf_subnet"></span>subnet** | The subnet in CIDR notation that wsnic will use:<br>- The subnet's first and last IP addresses are reserved for network and broadcast addresses.<br>- The subnet's second IP is reserved for the bridge device (also gateway and DHCP server IP).<br>- The remaining IP addresses are used for the DHCP address pool.<br>Example for the default subnet:<br>- Network address: 192.168.86.0<br>- Broadcast address: 192.168.86.255<br>- Bridge/gateway/DHCPD address: 192.168.86.1<br>- DHCP address pool: 192.168.86.2, 192.168.86.3, ..., 192.168.86.254<br>The default subnet might conflict with your local network configuration and must then be changed accordingly.<br>Default: **192.168.86.0/24**. |
-| **dhcp_enabled** | Enable DHCP/DNS service dnsmasq: either "0" (disabled) or "1" (enabled). Default: **1**. |
-| **dhcp_lease_file** | DHCP lease database file path. If undefined, wsnic uses a temporary file which will be deleted on close. Optional, default: *undefined*. |
-| **<span id="conf_dhcp_lease_time"></span>dhcp_lease_time** | DHCP lease time in seconds. Default: **86400** (24 hours). |
-| **<span id="conf_dhcp_domain_name"></span>dhcp_domain_name** | Domain Name of this subnet published in DHCP replies. Optional, default: *undefined*. |
-| **<span id="conf_dhcp_nameserver"></span>dhcp_nameserver** | Comma-separated list of Domain Name Server (DNS) IP address(es) published in DHCP replies, for example `8.8.8.8, 8.8.4.4`. If undefined, the bridge's IP address is used as the DNS address (which gets handled by dnsmasq).<br>Optional (0 or any number of DNS IP addresses), default: *undefined*. |
-
-### Using wsnic from sources
-
-Run `wsnic` using:
+Finally, run wsnic using:
  
 ```bash
-sudo ./wsnic.sh
+sudo ./wsnic.sh [WSNIC-OPTIONS]
 ```
 
-Command line options:
+See section [CLI options](#cli-options) for documentation on `WSNIC-OPTIONS` (or use `-h`).
 
-```
-$ ./wsnic.sh -h
-usage: wsnic [-h] [-n NETBE] [-c CONF_FILE] [-v] [-q] [--docker-mode]
+## WebSocket Secure support
 
-WebSocket to virtual network device proxy server.
-
-options:
-  -h, --help     show this help message and exit
-  -n NETBE       use network backend NETBE (currently only default "brtap" supported)
-  -c CONF_FILE   use configuration file CONF_FILE (default: wsnic.conf)
-  -v             output verbose log messages
-  -q             output warning and error log messages only
-  --docker-mode  use Docker configuration method
-```
-
-## WebSockets Secure support
-
-WebSockets Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined in `wsnic.conf`, which means you need:
+WebSocket Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined (either by CLI option or in `wsnic.conf`), which means you need:
 
 1. a DNS record for the hostname of your wsnic server
 2. a TLS server certificate issued for that DNS hostname
 
 If your wsnic server has a public DNS record for its hostname you should use a service like [Let’s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
 
-To enable a TLS certificate declare it in `wsnic.conf` using:
-
-```
-wss_server_cert=/var/local/crt/cert.crt
-wss_server_key=/var/local/crt/cert.key
-```
+The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/host/path`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
 
 WebSocket Secure URLs are of the form `wss://wsnic.example.com:8087`.
 
 ### Self-signed TLS server certificate
-
-The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/var/local/crt`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
 
 The DNS hostname doesn't need to be fully qualified in private networks, it might also be just `localhost` if wsnic (WebSocket server) and browser (WebSocket client) are running on the same machine.
 
@@ -194,8 +249,8 @@ Setting up a self-signed certificate involves two steps, after generating it you
 To issue a basic self-signed TLS server certificate for DNS hostname `wsnic.example.com`:
 
 ```bash
-mkdir /var/local/crt
-cd /var/local/crt
+mkdir /host/path
+cd /host/path
 
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
   -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com"

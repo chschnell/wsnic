@@ -14,8 +14,8 @@ class StunnelProxyServer:
         self.stunnel_p = None
 
     def open(self):
-        if not os.path.isfile(self.config.wss_server_cert):
-            logger.warning(f'{self.config.wss_server_cert}: file not found, TLS support disabled')
+        if not os.path.isfile(self.config.wss_certificate):
+            logger.warning(f'{self.config.wss_certificate}: file not found, TLS support disabled')
             return
         elif shutil.which('stunnel') is None:
             logger.warning(f'stunnel: file not found, TLS support disabled (Debian: install apt package stunnel)')
@@ -29,12 +29,12 @@ class StunnelProxyServer:
             f'[wsnic]',
             f'TIMEOUTclose = 0',
             f'socket = l:TCP_NODELAY=1',
-            f'accept = {self.config.ws_server_addr}:{self.config.wss_server_port}',
-            f'connect = {self.config.ws_server_port}',
-            f'cert = {self.config.wss_server_cert}'
+            f'accept = {self.config.ws_address}:{self.config.wss_port}',
+            f'connect = {self.config.ws_port}',
+            f'cert = {self.config.wss_certificate}'
         ]
-        if self.config.wss_server_key:
-            stunnel_conf.append(f'key = {self.config.wss_server_key}')
+        if self.config.wss_private_key:
+            stunnel_conf.append(f'key = {self.config.wss_private_key}')
 
         stunnel_conf_txt = '\n'.join(stunnel_conf)
 

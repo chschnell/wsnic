@@ -31,16 +31,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy Python source code into the container.
 COPY ./wsnic/*.py ./wsnic/
 
-# Define wsnic environment variable defaults.
-ENV WSNIC_SUBNET="192.168.86.0/24"
-ENV WSNIC_ENABLE_HOSTNET="0"
-ENV WSNIC_ENABLE_DHCP="1"
-ENV WSNIC_DHCP_LEASE_TIME="86400"
-ENV WSNIC_DHCP_DOMAIN_NAME=
-ENV WSNIC_DHCP_NAMESERVER=
-
 # Expose the ports that the application listens on.
 EXPOSE 80 443
 
 # Run the application.
-ENTRYPOINT ["python", "-m", "wsnic", "--docker-mode"]
+ENTRYPOINT ["python", "-m", "wsnic"]

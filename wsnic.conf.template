@@ -9,31 +9,38 @@
 
 #
 # WebSocket server address.
+# Defaults to "0.0.0.0" under Docker, else to "127.0.0.1".
 #
-ws_server_addr=127.0.0.1
+ws_address=
 
 #
 # WebSocket server port (ws://).
 #
-ws_server_port=8086
+ws_port=8086
 
 #
 # Secure WebSocket server port (wss://).
 #
-wss_server_port=8087
+wss_port=8087
 
 #
 # Absolute file path of the PEM encoded server certificate file (optional).
 #
-wss_server_cert=
+wss_certificate=
 
 #
 # Absolute file path of the PEM encoded private key file (optional).
 #
-wss_server_key=
+wss_private_key=
+
+#
+# Enable Internet access for bridge using inet_iface: either "0" (disabled) or "1" (enabled).
+#
+enable_inet=0
 
 #
 # Interface name of a physical network device that provides Internet access (optional).
+# Defaults to "eth0" under Docker.
 #
 inet_iface=
 
@@ -43,9 +50,9 @@ inet_iface=
 subnet=192.168.86.0/24
 
 #
-# Enable DHCP/DNS service dnsmasq: either "0" (disabled) or "1" (enabled).
+# Disable DHCP/DNS service dnsmasq: either "0" (enabled) or "1" (disabled).
 #
-dhcp_enabled=1
+disable_dhcp=0
 
 #
 # DHCP lease database file (optional, a temp file is used if undefined).

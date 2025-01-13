@@ -19,14 +19,14 @@ logger = logging.getLogger('websock')
 class WebSocketServer(Pollable):
     def __init__(self, server):
         super().__init__(server)
-        self.addr = f'{self.config.ws_server_addr}:{self.config.ws_server_port}'
+        self.addr = f'{self.config.ws_address}:{self.config.ws_port}'
         self.ws_clients = set()
         self.sock = None
 
     def open(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((self.config.ws_server_addr, self.config.ws_server_port))
+        self.sock.bind((self.config.ws_address, self.config.ws_port))
         self.sock.setblocking(0)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.listen(1)
