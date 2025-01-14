@@ -184,14 +184,14 @@ class WsnicServer:
                 last_refresh_tm = tm_now
 
     def shutdown(self):
+        if self.stunnel:
+            self.stunnel.close()
         if self.ws_server:
             self.ws_server.close()
             self.ws_server = None
         if self.netbe:
             self.netbe.close()
             self.netbe = None
-        if self.stunnel:
-            self.stunnel.close()
         self.epoll.close()
 
 def main():
