@@ -4,6 +4,7 @@ ARG PYTHON_VERSION=3.13
 FROM python:${PYTHON_VERSION}-slim AS base
 
 LABEL org.opencontainers.image.authors="christian.d.schnell@gmail.com"
+LABEL org.opencontainers.image.url="https://github.com/chschnell/wsnic"
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
