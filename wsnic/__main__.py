@@ -40,7 +40,8 @@ class WsnicConfig:
             else:
                 return opt_value
 
-        is_docker_env = os.path.isfile('/.dockerenv')
+        ## Docker creates "/.dockerenv", podman creates "/run/.containerenv"
+        is_docker_env = os.path.isfile('/.dockerenv') or os.path.isfile('/run/.containerenv')
 
         ## parse and apply wsnic.conf
         wsnic_conf = args.wsnic_conf
