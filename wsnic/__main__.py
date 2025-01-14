@@ -13,21 +13,6 @@ logger = logging.getLogger('main')
 
 class WsnicConfig:
     def __init__(self, args):
-        ## option defaults
-        self.ws_address = None          ## str, WebSocket server and stunnel bind address
-        self.ws_port = 8086             ## int, WebSocket server port (ws://)
-        self.wss_port = 8087            ## int, WebSocket Secure server port (wss://)
-        self.wss_certificate = None     ## str, PEM encoded certificate file, enables WebSocket Secure if defined
-        self.wss_private_key = None     ## str, PEM encoded private key file, optional
-        self.subnet = '192.168.86.0/24' ## str, defines bridge IP, gateway and DHCP server
-        self.enable_inet = False        ## bool, True: use NAT to connect bridge to inet-iface
-        self.inet_iface = None          ## str, name of an interface that provides Internet access
-        self.disable_dhcp = False       ## bool, True: disable DHCP, False: use dnsmasq for DHCP/DNS
-        self.dhcp_lease_file = None     ## str, DHCP lease database file, use temp file if undefined
-        self.dhcp_lease_time = 86400    ## int, DHCP lease time in seconds
-        self.dhcp_domain_name = None    ## str, local domain name announced in DHCP replies
-        self.dhcp_nameserver = None     ## array(str), list of DNS server IPs
-
         def parse_option(opt_name, opt_value):
             if opt_name in ['dhcp_nameserver']:
                 return re.split(r'[,:;\s]+', opt_value)
@@ -40,16 +25,27 @@ class WsnicConfig:
             else:
                 return opt_value
 
-        ## Docker creates "/.dockerenv", podman creates "/run/.containerenv"
+        ## declare options that can be modified by CLI or configuraton file
+        self.ws_address = None          ## str, WebSocket (Secure) TCP server bind address
+        self.ws_port = 8086             ## int, WebSocket TCP server port (ws://)
+        self.wss_port = 8087            ## int, WebSocket Secure TCP server port (wss://)
+        self.wss_certificate = None     ## str, PEM encoded certificate file, enables WebSocket Secure if defined
+        self.wss_private_key = None     ## str, PEM encoded private key file, optional
+        self.subnet = '192.168.86.0/24' ## str, defines bridge, gateway and DHCP server IP, and the DHCP pool
+        self.enable_inet = False        ## bool, True: use NAT masquerading to connect bridge to inet_iface
+        self.inet_iface = None          ## str, name of an interface that provides Internet access
+        self.disable_dhcp = False       ## bool, True: disable DHCP, False: use dnsmasq for DHCP/DNS
+        self.dhcp_lease_file = None     ## str, DHCP lease database file, use temp file if undefined
+        self.dhcp_lease_time = 86400    ## int, DHCP lease time in seconds
+        self.dhcp_domain_name = None    ## str, local domain name published in DHCP replies
+        self.dhcp_nameserver = None     ## array(str), list of DNS server IPs
+
+        ## check for Docker: Docker creates "/.dockerenv", podman "/run/.containerenv"
         is_docker_env = os.path.isfile('/.dockerenv') or os.path.isfile('/run/.containerenv')
 
-        ## parse and apply wsnic.conf
+        ## parse and apply configuration file options first
         wsnic_conf = args.wsnic_conf
-        if wsnic_conf:
-            if not os.path.isfile(wsnic_conf):
-                logger.warning(f'{wsnic_conf}: configuration file not found, using defaults!')
-                wsnic_conf = None
-        elif os.path.isfile('wsnic.conf'):
+        if wsnic_conf is None and os.path.isfile('wsnic.conf'):
             wsnic_conf = 'wsnic.conf'
         if wsnic_conf:
             logger.info(f'reading wsnic configuration from {wsnic_conf}')
@@ -63,44 +59,25 @@ class WsnicConfig:
                 else:
                     logger.warning(f'{wsnic_conf}: unknown option "{opt_name}" ignored!')
 
-        ## parse and apply command line arguments
+        ## parse and apply command line arguments next
         for opt_name, opt_value in args.__dict__.items():
             if opt_value is not None and hasattr(self, opt_name):
                 setattr(self, opt_name, parse_option(opt_name, opt_value))
 
-        ## set ws_address default value
+        ## set defaults last
         if self.ws_address is None:
             if is_docker_env:
                 self.ws_address = '0.0.0.0'
             else:
                 self.ws_address = '127.0.0.1'
+        if self.enable_inet and self.inet_iface is None and is_docker_env:
+            self.inet_iface = 'eth0'
+        if self.wss_certificate is None and os.path.isfile('cert/cert.crt'):
+            self.wss_certificate = os.path.abspath('cert/cert.crt')
+        if self.wss_private_key is None and os.path.isfile('cert/cert.key'):
+            self.wss_private_key = os.path.abspath('cert/cert.key')
 
-        ## set inet_iface default value
-        if self.inet_iface is None and self.enable_inet:
-            if is_docker_env:
-                self.inet_iface = 'eth0'
-            else:
-                logger.warning(f'enable_inet: failed, missing unspecified option "inet_iface"!')
-                self.enable_inet = False
-
-        ## set wss certificate default value
-        if self.wss_certificate is None:
-            if os.path.isfile('cert/cert.crt'):
-                self.wss_certificate = os.path.abspath('cert/cert.crt')
-        elif not os.path.isfile(self.wss_certificate):
-            logger.warning(f'{self.wss_certificate}: certificate file not found, wss disabled!')
-            self.wss_certificate = None
-
-        ## set wss private key default value
-        if self.wss_private_key is None:
-            if os.path.isfile('cert/cert.key'):
-                self.wss_private_key = os.path.abspath('cert/cert.key')
-        elif not os.path.isfile(self.wss_private_key):
-            logger.warning(f'{self.wss_private_key}: private key file not found, wss disabled!')
-            self.wss_certificate = None
-            self.wss_private_key = None
-
-        ## derive network settings dynamically from self.subnet:
+        ## derive network settings dynamically from self.subnet
         ip_subnet = ipaddress.ip_network(self.subnet)
         hosts = ip_subnet.hosts()
         server_addr = str(next(hosts))
@@ -108,7 +85,7 @@ class WsnicConfig:
         broadcast_addr = str(ip_subnet.broadcast_address)
         netmask = str(ip_subnet.netmask)
 
-        ## use server_addr for DNS server as default
+        ## set dhcp_nameserver default
         if not self.disable_dhcp and not self.dhcp_nameserver:
             self.dhcp_nameserver = [server_addr]
 
@@ -116,11 +93,11 @@ class WsnicConfig:
             options = [f'{opt_name} = {opt_value}' for opt_name, opt_value in self.__dict__.items()]
             logger.debug('wsnic configuration:\n' + '\n'.join(options))
 
-        self.is_docker_env = is_docker_env
-        self.server_addr = server_addr
-        self.host_addrs = host_addrs
-        self.broadcast_addr = broadcast_addr
-        self.netmask = netmask
+        self.is_docker_env = is_docker_env   ## bool, True: running under Docker or Docker-like environment
+        self.server_addr = server_addr       ## str, network's bridge, gateway and DHCP server IP address
+        self.host_addrs = host_addrs         ## array(str), network's DHCP host IP address pool
+        self.broadcast_addr = broadcast_addr ## str, network's broadcast IP address
+        self.netmask = netmask               ## str, network's netmask (in IP-notation)
 
 class WsnicServer:
     def __init__(self, config, netbe_class):
@@ -275,6 +252,13 @@ def main():
         'Optional, default: undefined.'))
     args = parser.parse_args()
 
+    if os.geteuid() != 0:
+        print(f'error: must be root')
+        return
+    elif args.wsnic_conf and not os.path.isfile(args.wsnic_conf):
+        print(f'error: configuration file "{args.wsnic_conf}" not found')
+        return
+
     log_level = logging.INFO
     if args.verbose:
         log_level = logging.DEBUG
@@ -285,17 +269,23 @@ def main():
 
     config = WsnicConfig(args)
 
-    if os.geteuid() != 0:
-        print(f'error: must be run by root')
-        return
-    elif shutil.which('ip') is None:
-        print(f'ip: file not found (Debian: install apt package iproute2)')
+    if shutil.which('ip') is None:
+        print(f'error: executable file "ip" not found (Debian: install apt package iproute2)')
         return
     elif shutil.which('iptables') is None:
-        print(f'iptables: file not found (Debian: install apt package iptables)')
+        print(f'error: executable file "iptables" not found (Debian: install apt package iptables)')
         return
     elif not config.disable_dhcp and shutil.which('dnsmasq') is None:
-        print(f'dnsmasq: file not found (Debian: install apt package dnsmasq)')
+        print(f'error: executable file "dnsmasq" not found (Debian: install apt package dnsmasq)')
+        return
+    elif config.enable_inet and not config.inet_iface:
+        print(f'error: network interface must be specified, see CLI option "-f"')
+        return
+    elif config.wss_certificate and not os.path.isfile(config.wss_certificate):
+        print(f'error: certificate file "{config.wss_certificate}" not found, see CLI option "-r"')
+        return
+    elif config.wss_private_key and not os.path.isfile(config.wss_private_key):
+        print(f'error: private key file "{config.wss_private_key}" not found, see CLI option "-k"')
         return
 
     server = WsnicServer(config, BridgedTapNetworkBackend)
