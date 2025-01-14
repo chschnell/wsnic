@@ -155,7 +155,7 @@ Command line interface of wsnic:
 
 ```
 usage: wsnic [-h] [-v] [-q] [-c CFGFILE] [-a ADDR] [--ws-port PORT]
-             [--wss-port PORT] [-r CRTFILE] [-k KEYFILE] [-s NETWORK]
+             [--wss-port PORT] [-r CRTFILE] [-k KEYFILE] [-s SUBNET]
              [-i] [-f IFACE] [--disable-dhcp] [--dhcp-lease-file DBFILE]
              [-t SECONDS] [-n NAME] [-d IPLIST]
 
@@ -188,7 +188,7 @@ options:
           Absolute path of a PEM formatted file containing only the
           private key of the server certificate.
           Optional, default: "cert/cert.key" (if exists).
-    -s NETWORK, --subnet NETWORK
+    -s SUBNET, --subnet SUBNET
           The wsnic subnet in CIDR notation, default: 192.168.86.0/24.
           The subnet's first and last IP addresses are reserved for
           network and broadcast addresses. The subnet's second IP is
@@ -375,3 +375,8 @@ Roughly, wsnic works like this:
   * begins passing ethernet frames between `wsX` and `wstapX`
 * If a WebSocket client disconnects, wsnic removes the associated TAP device from the bridge (and network)
 * DHCP server `dnsmasq` assigns DHCP leases to WebSocket clients, it is also the default DNS server
+
+## Credits
+
+* [v86](https://github.com/copy/v86), the browser-based x86 emulator wsnic was developed for.
+* [websockproxy](https://github.com/benjamincburns/websockproxy), the project that inspired wsnic.
