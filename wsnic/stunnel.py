@@ -43,13 +43,14 @@ class StunnelProxyServer:
             stunnel_conf.append(f'key = {self.config.wss_private_key}')
 
         stunnel_conf_txt = '\n'.join(stunnel_conf)
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f'stunnel.conf [{self.stunnel_conf.name}]:' + '\n' + stunnel_conf_txt)
 
         ## write stunnel.conf to temp file
         self.stunnel_conf = tempfile.NamedTemporaryFile(delete=False)
         self.stunnel_conf.write(stunnel_conf_txt.encode() + b'\n')
         self.stunnel_conf.close()
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f'stunnel.conf [{self.stunnel_conf.name}]:' + '\n' + stunnel_conf_txt)
 
         ## execute stunnel
         stunnel_cmdline = ['stunnel', self.stunnel_conf.name]
