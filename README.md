@@ -5,7 +5,7 @@
 There are two methods available to install wsnic, see
 
 * **[Docker installation](#docker-installation)** about installing wsnic with Docker, and
-* **[Source installation](#source-installation)** about installing wsnic without it.
+* **[Source installation](#source-installation)** about installing wsnic from this repository.
 
 In either case, see section **[CLI options](#cli-options)** next about wsnic's command line interface for configuration options.
 
