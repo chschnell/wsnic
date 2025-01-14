@@ -56,7 +56,6 @@ wsnic requires the following `docker run` command line arguments to be present (
 docker run \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
-    --sysctl net.ipv4.ip_forward=1 \
     -p 8086:8086 \
     -p 8087:8087 \
     chschnell86/wsnic:latest [WSNIC-OPTIONS]
@@ -68,8 +67,6 @@ Brief description for each of these arguments, and why they're needed:
    Allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices.
 * **--device /dev/net/tun:/dev/net/tun**  
    Map host's TUN device file into Docker image, this device is needed to create TAP devices and otherwise not available in Docker images.
-* **--sysctl net.ipv4.ip_forward=1**  
-   Allow IP forwarding in the Docker image (maybe not needed).
 * **-p 8086:8086**  
    Maps the WebSocket (ws://) port number `<host-port>:<docker-port>` to host port 8086, for example `12345:8086` would instead expose wsnic on the host's port 12345.
 * **-p 8087:8087**  
@@ -87,7 +84,6 @@ Full example (replace `/host/path` with the absolute file path in your local env
 docker run -rm --interactive --tty \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
-    --sysctl net.ipv4.ip_forward=1 \
     -p 8086:8086 \
     -p 8087:8087 \
     -v /host/path/cert.crt:/opt/wsnic/cert/cert.crt \
