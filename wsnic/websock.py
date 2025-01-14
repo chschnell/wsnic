@@ -42,7 +42,7 @@ class WebSocketServer(Pollable):
         if self.sock:
             self.sock.close()
             self.sock = None
-            logger.info(f'{self.addr}: WebSocket server closed')
+            logger.info(f'WebSocket server closed')
 
     def recv_ready(self):
         sock, addr = self.sock.accept()

@@ -24,6 +24,10 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
     def _install_nat_rules(self, do_install):
         if self.config.inet_iface:
+            if do_install:
+                logger.info(f'connecting {self.br_iface} to {self.config.inet_iface} using NAT masquerading')
+            else:
+                logger.info(f'disconnecting {self.br_iface} from {self.config.inet_iface}')
             cmd = '-A' if do_install else '-D'
             run = Exec(logger, check=do_install)
             run(f'iptables {cmd} POSTROUTING -t nat -s {self.config.subnet} -o {self.config.inet_iface} -j MASQUERADE')
@@ -39,6 +43,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
             return
         self.is_opened = True
 
+        logger.info(f'creating bridge {self.br_iface}')
+
         ## create bridge with manually fixed MAC address, see https://superuser.com/a/1725894
         run = Exec(logger, check=True)
         run(f'ip link add dev {self.br_iface} address {mac2str(random_private_mac())} type bridge')
@@ -47,7 +53,6 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
         ## setup bridge NAT rules
         self._install_nat_rules(True)
-        logger.info(f'created bridge {self.br_iface}')
 
         ## install DHCP server on bridge interface
         if not self.config.disable_dhcp:
