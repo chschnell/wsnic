@@ -57,7 +57,7 @@ class StunnelProxyServer:
         log_cmdline = ''
         if logger.isEnabledFor(logging.DEBUG):
             log_cmdline = f': {" ".join(stunnel_cmdline)}'
-        logger.info(f'{self.config.ws_address}:{self.config.wss_port}: starting stunnel child process{log_cmdline}')
+        logger.info(f'{self.config.ws_address}:{self.config.wss_port}: starting TLS child process stunnel{log_cmdline}')
         self.stunnel_p = subprocess.Popen(stunnel_cmdline)
 
     def close(self):
@@ -65,7 +65,7 @@ class StunnelProxyServer:
             self.stunnel_p.terminate()
             self.stunnel_p.wait()
             self.stunnel_p = None
-            logger.info('stunnel child process terminated')
+            logger.info('child process stunnel terminated')
         if self.stunnel_conf:
             os.unlink(self.stunnel_conf.name)
             self.stunnel_conf = None

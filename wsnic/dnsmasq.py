@@ -42,7 +42,7 @@ class Dnsmasq:
         log_cmdline = ''
         if logger.isEnabledFor(logging.DEBUG):
             log_cmdline = f': {" ".join(cmdline)}'
-        logger.info(f'{self.config.server_addr}: starting dnsmasq child process{log_cmdline}')
+        logger.info(f'{self.config.server_addr}: starting DHCP/DNS child process dnsmasq{log_cmdline}')
         self.dnsmasq_p = subprocess.Popen(cmdline)
 
     def close(self):
@@ -50,7 +50,7 @@ class Dnsmasq:
             self.dnsmasq_p.terminate()
             self.dnsmasq_p.wait()
             self.dnsmasq_p = None
-            logger.info('dnsmasq child process terminated')
+            logger.info('child process dnsmasq terminated')
         if self.lease_file:
             os.unlink(self.lease_file.name)
             self.lease_file = None
