@@ -2,7 +2,7 @@
 
 ## Overview
 
-There are two methods available to install wsnic, see
+There are two different ways to install wsnic, see
 
 * **[Docker installation](#docker-installation)** about installing wsnic with Docker, and
 * **[Source installation](#source-installation)** about installing wsnic from this repository.
@@ -11,7 +11,7 @@ In either case, see section **[CLI options](#cli-options)** next about wsnic's c
 
 For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#websocket-secure-support)**.
 
-**Features**
+### Features
 
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
