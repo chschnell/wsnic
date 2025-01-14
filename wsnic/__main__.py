@@ -5,7 +5,6 @@
 
 import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil
 
-from wsnic import sysctl
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
@@ -131,8 +130,6 @@ class WsnicServer:
         self.stunnel = None             ## StunnelProxyServer, created in run()
         self.epoll = select.epoll()     ## single epoll object for all open sockets and files
         self.pollables = {}             ## dict(int fd => Pollable pollable)
-        if config.is_docker_env:
-            sysctl.disable()
 
     def register_pollable(self, fd, pollable, epoll_flags):
         if fd in self.pollables:
@@ -150,12 +147,6 @@ class WsnicServer:
                 del self.pollables[fd]
 
     def run(self):
-        sysctl.write('net/ipv4/ip_forward', 1)
-        sysctl.write('net/ipv4/conf/all/forwarding', 1)
-        sysctl.write('net/ipv4/conf/default/forwarding', 1)
-        sysctl.write('net/ipv6/conf/all/forwarding', 1)
-        sysctl.write('net/ipv6/conf/default/forwarding', 1)
-
         self.netbe = self.netbe_class(self)
         self.netbe.open()
 
@@ -201,7 +192,6 @@ class WsnicServer:
         if self.stunnel:
             self.stunnel.close()
         self.epoll.close()
-        sysctl.restore_values()
 
 def main():
     def format_help(text):

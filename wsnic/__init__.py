@@ -69,34 +69,6 @@ def log_eth_frame(tag, eth_frame, logger):
     ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
     logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
 
-class Sysctl:
-    def __init__(self):
-        self.enabled = True
-        self.old_values = {}
-
-    def disable(self):
-        self.enabled = False
-
-    def write(self, path, value):
-        if not self.enabled:
-            return False
-        path = f'/proc/sys/{path}'
-        if os.path.isfile(path):
-            if path not in self.old_values:
-                with open(path, 'r') as f_in:
-                    self.old_values[path] = f_in.read()
-            with open(path, 'w') as f_out:
-                f_out.write(f'{value}\n')
-            return True
-        return False
-
-    def restore_values(self):
-        for path, value in self.old_values.items():
-            with open(path, 'w') as f_out:
-                f_out.write(value)
-
-sysctl = Sysctl()
-
 class Exec:
     def __init__(self, logger, check=False):
         self.logger = logger

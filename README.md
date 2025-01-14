@@ -288,6 +288,50 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
 
+## Troubleshooting
+
+### sysctl
+
+The necessity for adjusting [`sysctl`](https://linux.die.net/man/8/sysctl) settings in the Linux host is not entirely clear, and the host's defaults of some `sysctl` settings are also not always known. For this reason wsnic does not modify these settings by itself, they can be changed from outside wsnic as described below.
+
+#### sysctl (non-Docker)
+
+To see relevant sysctl settings use:
+
+```bash
+sudo sysctl -a | grep forward
+```
+
+Look for `net.ipv4.ip_forward` and make sure it is set to `1`, otherwise change it using:
+
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+```
+
+For some sysctl settings it is unclear whether they're even relevant, if there are still issues you might try:
+
+```bash
+sudo sysctl -w net.ipv4.conf.all.forwarding=1
+sudo sysctl -w net.ipv4.conf.default.forwarding=1
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+sudo sysctl -w net.ipv6.conf.default.forwarding=1
+```
+
+#### sysctl (Docker)
+
+To change sysctl settings from within the Docker image would require to run it with the [`--privileged`](https://docs.docker.com/reference/cli/docker/container/run/#privileged) flag which is otherwise not needed by wsnic and hence avoided.
+
+Pass sysctl settings on the `docker run` command line like so:
+
+```bash
+docker run ... \
+    --sysctl net.ipv4.ip_forward=1 \
+    --sysctl net.ipv4.conf.all.forwarding=1 \
+    --sysctl net.ipv4.conf.default.forwarding=1 \
+    --sysctl net.ipv6.conf.all.forwarding=1 \
+    --sysctl net.ipv6.conf.default.forwarding=1 ...
+```
+
 ## How it works
 
 Overview of wsnic and its network components:
