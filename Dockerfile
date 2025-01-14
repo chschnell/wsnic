@@ -32,7 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY ./wsnic/*.py ./wsnic/
 
 # Expose the ports that the application listens on.
-EXPOSE 80 443
+EXPOSE 8086 8087
 
 # Run the application.
 ENTRYPOINT ["python", "-m", "wsnic"]
