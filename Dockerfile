@@ -30,7 +30,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install -r requirements.txt
 
 # Copy Python source code into the container.
-COPY ./wsnic/*.py ./wsnic/
+COPY wsnic/*.py ./wsnic/
+COPY README.md LICENSE .
 
 # Expose the ports that the application listens on.
 EXPOSE 8086 8087
