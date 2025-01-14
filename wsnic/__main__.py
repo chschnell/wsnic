@@ -234,7 +234,7 @@ def main():
         'Absolute path of a PEM formatted file containing only the private'
         ' key of the server certificate.\n'
         'Optional, default: "cert/cert.key" (if exists).'))
-    parser.add_argument('-s', '--subnet', metavar='NETWORK', help=format_help(
+    parser.add_argument('-s', '--subnet', metavar='SUBNET', help=format_help(
         'The wsnic subnet in CIDR notation, default: 192.168.86.0/24.\n'
         'The subnet\'s first and last IP addresses are reserved for'
         ' network and broadcast addresses.'
