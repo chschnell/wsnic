@@ -294,7 +294,7 @@ This seeming error message is in fact our expected success message here, if you 
 
 The necessity for adjusting [`sysctl`](https://linux.die.net/man/8/sysctl) settings in the Linux host is not entirely clear, and the host's defaults of some `sysctl` settings are also not always known. For this reason wsnic does not modify these settings by itself, they can be changed from outside wsnic as described below.
 
-#### sysctl (non-Docker)
+**sysctl (non-Docker)**
 
 To see relevant sysctl settings use:
 
@@ -317,7 +317,7 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 sudo sysctl -w net.ipv6.conf.default.forwarding=1
 ```
 
-#### sysctl (Docker)
+**sysctl (Docker)**
 
 To change sysctl settings from within the Docker image would require to run it with the [`--privileged`](https://docs.docker.com/reference/cli/docker/container/run/#privileged) flag which is otherwise not needed by wsnic and hence avoided.
 
