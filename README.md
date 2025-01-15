@@ -206,8 +206,8 @@ options:
           access to the Internet (for example "eth0" or "enp0s3").
           wsnic will try to auto-detect this interface, this option is
           only needed to force an interface name in case detection
-          fails.This option only takes effect if CLI option -i is also
-          present.
+          fails. This option only takes effect if CLI option -i is
+          also present.
           Optional, default (Docker only): "eth0".
     --disable-dhcp
           Disable DHCP/DNS service using dnsmasq.

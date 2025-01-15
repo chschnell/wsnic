@@ -239,7 +239,7 @@ def main():
         ' the Internet (for example "eth0" or "enp0s3").\n'
         'wsnic will try to auto-detect this interface, this option is only'
         ' needed to force an interface name in case detection fails.'
-        'This option only takes effect if CLI option -i is also present.\n'
+        ' This option only takes effect if CLI option -i is also present.\n'
         'Optional, default (Docker only): "eth0".'))
     parser.add_argument('--disable-dhcp', action='store_const', const='1', help=format_help(
         'Disable DHCP/DNS service using dnsmasq.'))
