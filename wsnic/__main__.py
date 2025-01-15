@@ -71,12 +71,9 @@ class WsnicConfig:
             else:
                 self.ws_address = '127.0.0.1'
         if self.enable_inet and self.inet_iface is None:
-            if is_docker_env:
-                self.inet_iface = 'eth0'
-            else:
-                inet_iface = subprocess.getoutput('ip route | grep "^default " | grep -Po "(?<=dev )[^ ]+"')
-                if inet_iface:
-                    self.inet_iface = inet_iface
+            inet_iface = subprocess.getoutput('ip route | grep "^default " | grep -Po "(?<=dev )[^ ]+"')
+            if inet_iface:
+                self.inet_iface = inet_iface
         if self.wss_certificate is None and os.path.isfile('cert/cert.crt'):
             self.wss_certificate = os.path.abspath('cert/cert.crt')
         if self.wss_private_key is None and os.path.isfile('cert/cert.key'):

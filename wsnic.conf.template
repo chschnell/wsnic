@@ -40,7 +40,7 @@ enable_inet=0
 
 #
 # Interface name of a physical network device that provides Internet access (optional).
-# Defaults to "eth0" under Docker.
+# This option is provided in case that auto-detection of this network device fails.
 #
 inet_iface=
 
