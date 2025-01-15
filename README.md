@@ -204,7 +204,11 @@ options:
     -f IFACE, ---inet-iface IFACE
           Interface name of a physical network device that provides
           access to the Internet (for example "eth0" or "enp0s3").
-          Optional, default: "eth0" under Docker or undefined.
+          wsnic will try to auto-detect this interface, this option is
+          only needed to force an interface name in case detection
+          fails.This option only takes effect if CLI option -i is also
+          present.
+          Optional, default (Docker only): "eth0".
     --disable-dhcp
           Disable DHCP/DNS service using dnsmasq.
     --dhcp-lease-file DBFILE

@@ -3,7 +3,7 @@
 ## Main entry point.
 ##
 
-import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil
+import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil, subprocess
 
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
@@ -70,8 +70,13 @@ class WsnicConfig:
                 self.ws_address = '0.0.0.0'
             else:
                 self.ws_address = '127.0.0.1'
-        if self.enable_inet and self.inet_iface is None and is_docker_env:
-            self.inet_iface = 'eth0'
+        if self.enable_inet and self.inet_iface is None:
+            if is_docker_env:
+                self.inet_iface = 'eth0'
+            else:
+                inet_iface = subprocess.getoutput('ip route | grep "^default " | grep -Po "(?<=dev )[^ ]+"')
+                if inet_iface:
+                    self.inet_iface = inet_iface
         if self.wss_certificate is None and os.path.isfile('cert/cert.crt'):
             self.wss_certificate = os.path.abspath('cert/cert.crt')
         if self.wss_private_key is None and os.path.isfile('cert/cert.key'):
@@ -232,7 +237,10 @@ def main():
     parser.add_argument('-f', '---inet-iface', metavar='IFACE', help=format_help(
         'Interface name of a physical network device that provides access to'
         ' the Internet (for example "eth0" or "enp0s3").\n'
-        'Optional, default: "eth0" under Docker or undefined.'))
+        'wsnic will try to auto-detect this interface, this option is only'
+        ' needed to force an interface name in case detection fails.'
+        'This option only takes effect if CLI option -i is also present.\n'
+        'Optional, default (Docker only): "eth0".'))
     parser.add_argument('--disable-dhcp', action='store_const', const='1', help=format_help(
         'Disable DHCP/DNS service using dnsmasq.'))
     parser.add_argument('--dhcp-lease-file', metavar='DBFILE', help=format_help(
