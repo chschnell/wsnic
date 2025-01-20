@@ -40,6 +40,7 @@ class WebSocketClient(Pollable):
         self.hs_request_buffer = bytearray()
 
         ## message decoder state
+        self.sock_recv_buf = bytearray(16384) ## fixed buffer for socket.recv_into()
         self.payload_len = None               ## int, payload length of current message
         self.recv_buffer = None               ## bytearray[payload_len], current payload data
         self.recv_cursor = None               ## int, cursor into recv_buffer[]
@@ -67,16 +68,16 @@ class WebSocketClient(Pollable):
             #log_eth_frame('nbe->ws', eth_frame, logger)
             payload_len = len(eth_frame)
             if payload_len < 126:
-                ws_msg = struct.pack(f'!BB{payload_len}s', OP_CODE_BINARY_MSG | FLAG_FIN, payload_len, eth_frame)
+                ws_header = struct.pack(f'!BB', OP_CODE_BINARY_MSG | FLAG_FIN, payload_len)
             else:
-                ws_msg = struct.pack(f'!BBH{payload_len}s', OP_CODE_BINARY_MSG | FLAG_FIN, 126, payload_len, eth_frame)
-            self.out.append(ws_msg)
+                ws_header = struct.pack(f'!BBH', OP_CODE_BINARY_MSG | FLAG_FIN, 126, payload_len)
+            self.out.append([ws_header, eth_frame])
             self.wants_send(True)
 
     def send_ready(self):
         try:
             while self.sock and not self.out.is_empty():
-                self.sock.send(self.out.get_frame())
+                self.sock.sendmsg(self.out.get_frame())
         except OSError as e:
             self.close()
             logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
@@ -86,10 +87,11 @@ class WebSocketClient(Pollable):
                 self.close()
 
     def recv_ready(self):
+        sock_recv_buf = self.sock_recv_buf
         while self.sock:
             try:
-                ws_data = self.sock.recv(65535)
-                if not ws_data:
+                sock_recv_len = self.sock.recv_into(sock_recv_buf)
+                if sock_recv_len <= 0:
                     break
             except BlockingIOError:
                 break
@@ -98,19 +100,19 @@ class WebSocketClient(Pollable):
                 self.close()
                 break
             if self.state == STATE_CONNECTED:
-                self._handle_websocket_message(ws_data)
+                self._handle_websocket_message(sock_recv_buf, sock_recv_len)
             elif self.state == STATE_AWAIT_HANDSHAKE:
                 hs_websocket_key = None
-                header_length = ws_data.find(b'\r\n\r\n')
+                header_length = sock_recv_buf.find(b'\r\n\r\n', 0, sock_recv_len)
                 if header_length < 0:
-                    self.hs_request_buffer.extend(ws_data)
+                    self.hs_request_buffer.extend(sock_recv_buf[ : sock_recv_len ])
                 elif len(self.hs_request_buffer):
                     header_length += len(self.hs_request_buffer)
-                    self.hs_request_buffer.extend(ws_data)
+                    self.hs_request_buffer.extend(sock_recv_buf[ : sock_recv_len ])
                     hs_websocket_key = self._parse_handshake_request(self.hs_request_buffer, header_length)
                     self.hs_request_buffer.clear()
                 else:
-                    hs_websocket_key = self._parse_handshake_request(ws_data, header_length)
+                    hs_websocket_key = self._parse_handshake_request(sock_recv_buf, header_length)
                 if hs_websocket_key:
                     self._send_handshake_response(hs_websocket_key)
                     self.netbe.attach_ws_client(self)
@@ -171,10 +173,10 @@ class WebSocketClient(Pollable):
             b'Sec-WebSocket-Version: 13',
             b'Sec-WebSocket-Accept: ' + sec_websocket_accept,
             b'', b'' ])
-        self.out.append(response_bytes)
+        self.out.append([response_bytes])
         self.wants_send(True)
 
-    def _handle_websocket_message(self, ws_msg):
+    def _handle_websocket_message(self, ws_msg, ws_msg_len):
         msg_byte = ws_msg[0]
         flag_fin = bool(msg_byte & FLAG_FIN)
         op_code = msg_byte & 0x0F
@@ -195,10 +197,10 @@ class WebSocketClient(Pollable):
             mask_bytes = ws_msg[ cursor : cursor + 4 ]
             cursor += 4
 
-        self.recv_buffer = bytearray(self.payload_len)
+        self.recv_buffer = bytearray(16384)
         self.recv_cursor = 0
 
-        n_remaining = min(self.payload_len - self.recv_cursor, len(ws_msg) - cursor)
+        n_remaining = min(self.payload_len - self.recv_cursor, ws_msg_len - cursor)
         for msg_ofs in range(cursor, cursor + n_remaining):
             unmasked_byte = ws_msg[msg_ofs] ^ mask_bytes[self.recv_cursor % 4]
             self.recv_buffer[self.recv_cursor] = unmasked_byte
@@ -207,13 +209,14 @@ class WebSocketClient(Pollable):
         if self.recv_cursor == self.payload_len:
             if op_code == OP_CODE_BINARY_MSG:
                 #log_eth_frame('ws->nbe', self.recv_buffer, logger)
-                self.netbe.forward_from_ws_client(self, self.recv_buffer)
+                # TODO: pass self.payload_len to forward_from_ws_client() instead of subarray
+                self.netbe.forward_from_ws_client(self, self.recv_buffer[ : self.payload_len ])
             elif op_code == OP_CODE_CLOSE:
                 # TODO: WebSocket close handshake
                 self.close()
             else:
                 logger.info(f'STATE_CONNECTED: fin={flag_fin} op_code={op_code} masked={flag_masked} '
-                    f'payload_len={self.payload_len} real_len={len(ws_msg)} cursor={cursor}')
+                    f'payload_len={self.payload_len} ws_msg_len={ws_msg_len} cursor={cursor}')
             self.payload_len = None
             self.recv_buffer = None
             self.recv_cursor = None
