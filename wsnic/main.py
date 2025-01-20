@@ -5,7 +5,8 @@
 
 import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil, subprocess
 
-from wsnic.websock import WebSocketServer
+#from wsnic.websock import WebSocketServer
+from wsnic.websocksrv import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
