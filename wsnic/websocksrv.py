@@ -3,224 +3,304 @@
 ## WebSocket Server class.
 ##
 
-import logging, socket, time, struct, base64, hashlib
+import logging, collections, socket, time, struct, base64, hashlib
 
-from wsnic import Pollable, FrameQueue, log_eth_frame
+from wsnic import Pollable
 
 logger = logging.getLogger('websock')
 
-STATE_AWAIT_HANDSHAKE = 1
-STATE_CONNECTED       = 2
-STATE_DISCONECTING    = 3
-STATE_DISCONECTED     = 4
+class WsHandshakeDecoder:
+    def __init__(self, ws_client):
+        self.ws_client = ws_client
+        self.request_buffer = bytearray()
 
-WS_MAGIC_UUID = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
-
-OP_CODE_CONTINUATION = 0x0
-OP_CODE_TEXT_MSG     = 0x1
-OP_CODE_BINARY_MSG   = 0x2
-OP_CODE_CLOSE        = 0x8
-OP_CODE_PING         = 0x9
-OP_CODE_PONG         = 0xA
-
-FLAG_FIN    = 0x80
-FLAG_MASKED = 0x80
-
-class WebSocketClient(Pollable):
-    def __init__(self, ws_server):
-        super().__init__(ws_server.server)
-        self.ws_server = ws_server            ## WebSocketServer, the server that created this instance
-        self.out = FrameQueue()               ## frames waiting to be send to self.sock
-        self.last_recv_tm = time.time()       ## most recent time any data was received from self.sock
-        self.last_ping_tm = self.last_recv_tm ## most recent time a PING was sent to self.sock
-        self.closing = False                  ## True: protocol reported close but data to send still pending
-        self.sock = None                      ## TCP/IP socket accepted by WebSocketServer
-        self.addr = None                      ## string, remote client address "IP:PORT"
-        self.state = STATE_AWAIT_HANDSHAKE
-        self.hs_request_buffer = bytearray()
-
-        ## message decoder state
-        self.sock_recv_buf = bytearray(16384) ## fixed buffer for socket.recv_into()
-        self.payload_len = None               ## int, payload length of current message
-        self.recv_buffer = None               ## bytearray[payload_len], current payload data
-        self.recv_cursor = None               ## int, cursor into recv_buffer[]
-
-        ## opaque pointer reserved for NetworkBackend state
-        self.nbe_data = None
-
-    def open(self, sock, addr):
-        self.sock = sock
-        self.addr = f'{addr[0]}:{addr[1]}'
-        super().open(sock.fileno())
-
-    def close(self):
-        super().close()
-        self.netbe.detach_ws_client(self)
-        self.ws_server.remove_client(self)
-        if self.sock is not None:
-            self.sock.close()
-            self.sock = None
-            logger.info(f'{self.addr}: WebSocket client disconnected')
-
-    def send(self, eth_frame):
-        if self.sock is not None:
-            #log_eth_frame('nbe->ws', eth_frame, logger)
-            payload_len = len(eth_frame)
-            if payload_len < 126:
-                self.out.append(struct.pack(f'!BB', OP_CODE_BINARY_MSG | FLAG_FIN, payload_len))
-            else:
-                self.out.append(struct.pack(f'!BBH', OP_CODE_BINARY_MSG | FLAG_FIN, 126, payload_len))
-            self.out.append(eth_frame)
-            self.wants_send(True)
-
-    def send_ready(self):
-        if self.sock is None:
-            return
-        try:
-            self.sock.sendmsg(self.out.queue)
-            self.out.queue.clear()
-        except OSError as e:
-            self.close()
-            logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
+    def decode(self, data, data_len):
+        handshake_key = None
+        header_len = data.find(b'\r\n\r\n', 0, data_len)
+        if header_len < 0:
+            self.request_buffer.extend(data[ : data_len ])
+        elif len(self.request_buffer):
+            header_len += len(self.request_buffer)
+            self.request_buffer.extend(data[ : data_len ])
+            handshake_key = self._parse_handshake_request(self.request_buffer, header_len)
+            self.request_buffer.clear()
         else:
-            self.wants_send(False)
-            if self.closing:
-                self.close()
+            handshake_key = self._parse_handshake_request(data, header_len)
+        if handshake_key:
+            self.ws_client.handle_ws_handshake(handshake_key)
 
-    def recv_ready(self):
-        sock_recv_buf = self.sock_recv_buf
-        while self.sock:
-            try:
-                sock_recv_len = self.sock.recv_into(sock_recv_buf)
-                if sock_recv_len <= 0:
-                    break
-            except BlockingIOError:
-                break
-            except OSError as e:
-                logger.info(f'{self.addr}: WebSocket client disconnected at recv(), reason: {e}')
-                self.close()
-                break
-            if self.state == STATE_CONNECTED:
-                self._handle_websocket_message(sock_recv_buf, sock_recv_len)
-            elif self.state == STATE_AWAIT_HANDSHAKE:
-                hs_websocket_key = None
-                header_length = sock_recv_buf.find(b'\r\n\r\n', 0, sock_recv_len)
-                if header_length < 0:
-                    self.hs_request_buffer.extend(sock_recv_buf[ : sock_recv_len ])
-                elif len(self.hs_request_buffer):
-                    header_length += len(self.hs_request_buffer)
-                    self.hs_request_buffer.extend(sock_recv_buf[ : sock_recv_len ])
-                    hs_websocket_key = self._parse_handshake_request(self.hs_request_buffer, header_length)
-                    self.hs_request_buffer.clear()
-                else:
-                    hs_websocket_key = self._parse_handshake_request(sock_recv_buf, header_length)
-                if hs_websocket_key:
-                    self._send_handshake_response(hs_websocket_key)
-                    self.netbe.attach_ws_client(self)
-                    self.state = STATE_CONNECTED
-                    logger.info(f'{self.addr}: accepted WebSocket client connection')
-
-    def _parse_handshake_request(self, buffer, length):
+    def _parse_handshake_request(self, data, data_len):
         hs_upgrade_websocket = False    ## True if header "Upgrade: websocket\r\n" exists
-        hs_websocket_key = None         ## bytes value of header "Sec-WebSocket-Key"
+        handshake_key = None            ## bytes value of header "Sec-WebSocket-Key"
 
         ## parse HTTP request start line, for example "GET / HTTP/1.1\r\n"
-        eol_ofs = buffer.find(b'\r\n', 0, length)
+        eol_ofs = data.find(b'\r\n', 0, data_len)
         if eol_ofs < 0:
             logger.debug(f'{self.addr}: request dropped, reason: missing HTTP request start line')
             return None
-        start_line_fields = buffer[ : eol_ofs].split(b' ')
+        start_line_fields = data[ : eol_ofs].split(b' ')
         if len(start_line_fields) != 3 or start_line_fields[0].upper() != b'GET':
             logger.debug(f'{self.addr}: request dropped, reason: malformed HTTP request start line')
             return None
         cursor = eol_ofs + 2
 
         ## parse HTTP request header
-        while cursor < length:
+        while cursor < data_len:
             ## parse header name into header_name
-            eol_ofs = buffer.find(b'\r\n', cursor, length)
+            eol_ofs = data.find(b'\r\n', cursor, data_len)
             if eol_ofs < 0:
-                eol_ofs = length
-            colon_ofs = buffer.find(0x3A, cursor, eol_ofs)    ## 0x3A: ASCII colon ":"
+                eol_ofs = data_len
+            colon_ofs = data.find(0x3A, cursor, eol_ofs)    ## 0x3A: ASCII colon ":"
             if colon_ofs < 0:
                 logger.debug(f'{self.addr}: request dropped, reason: missing colon in HTTP header line')
                 return None
-            header_name = buffer[cursor : colon_ofs].lower()
+            header_name = data[cursor : colon_ofs].lower()
             if header_name in [b'sec-websocket-key', b'upgrade']:
                 ## parse header value into header_value
                 value_ofs = colon_ofs + 1
-                while value_ofs < eol_ofs and buffer[value_ofs] == 0x20:    ## 0x20: ASCII whitespace " "
+                while value_ofs < eol_ofs and data[value_ofs] == 0x20:    ## 0x20: ASCII whitespace " "
                     value_ofs += 1
-                header_value = buffer[value_ofs : eol_ofs]
+                header_value = data[value_ofs : eol_ofs]
                 if header_name == b'sec-websocket-key':
-                    hs_websocket_key = header_value
+                    handshake_key = header_value
                 else:
                     hs_upgrade_websocket = b'websocket' in header_value 
             cursor = eol_ofs + 2
 
-        if hs_upgrade_websocket and hs_websocket_key is not None:
-            return hs_websocket_key
+        if hs_upgrade_websocket and handshake_key is not None:
+            return handshake_key
         else:
             return None
 
-    def _send_handshake_response(self, hs_websocket_key):
-        raw_websocket_accept  = hs_websocket_key + WS_MAGIC_UUID
+WS_MAGIC_UUID   = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+WS_FIN_BIT      = 0x80
+WS_MASKED_BIT   = 0x80
+WS_OP_CODE_BITS = 0x0F
+WS_PAYLOAD_BITS = 0x7F
+
+OP_CODE_CONTINUATION = 0x0
+OP_CODE_TXT_MSG      = 0x1
+OP_CODE_BIN_MSG      = 0x2
+OP_CODE_CLOSE        = 0x8
+OP_CODE_PING         = 0x9
+OP_CODE_PONG         = 0xA
+
+MSG_PARSE_START   = 0
+MSG_PARSE_LEN7    = 1
+MSG_PARSE_LEN16   = 2
+MSG_PARSE_LEN64   = 3
+MSG_PARSE_MASK    = 4
+MSG_PARSE_PAYLOAD = 5
+MSG_PARSE_DONE    = 6
+
+MAX_PAYLOAD_SIZE = 16384
+
+class WsMessageDecoder:
+    def __init__(self, ws_client):
+        self.ws_client = ws_client         ## parent WebSocketClient
+        self.op_code = None                ## int, one of OP_CODE_*
+        self.fin_flag = False              ## bool, True: current message has FIN flag set (TODO)
+        self.payload_len = 0               ## int, payload length of current message
+        self.payload_masked = False        ## bool, True: payload is XOR masked with payload_mask
+        self.payload_mask = bytearray(4)   ## 32 bit XOR mask
+        self.payload_buf = None            ## bytearray[payload_len], current payload buffer
+        self.payload_cursor = None         ## int, cursor into payload_buf[]
+        self.parse_state = MSG_PARSE_START ## int, one of MSG_PARSE_*
+        self.parse_substate = None         ## int, sub-state depending on parse_state
+
+    def decode(self, data, data_len):
+        data_ofs = 0
+        while data_ofs < data_len:
+            if self.parse_state != MSG_PARSE_PAYLOAD:
+                data_ofs = self._parse_header(data, data_ofs, data_len)
+            if self.parse_state == MSG_PARSE_PAYLOAD:
+                data_ofs = self._parse_payload(data, data_ofs, data_len)
+            if self.parse_state == MSG_PARSE_DONE:
+                self.ws_client.handle_ws_message(self.op_code, self.payload_buf, self.payload_len)
+                self.payload_buf = None
+                self._set_parse_state(MSG_PARSE_START)
+
+    def _set_parse_state(self, new_parse_state):
+        if new_parse_state == MSG_PARSE_MASK and not self.payload_masked:
+            ## skip mask bytes if MASKED flag is not set
+            new_parse_state = MSG_PARSE_PAYLOAD
+        if new_parse_state == MSG_PARSE_PAYLOAD:
+            self.payload_cursor = 0
+            if self.payload_len > MAX_PAYLOAD_SIZE:
+                ## drop oversized payload
+                self.payload_buf = None
+            elif self.payload_len > 0:
+                self.payload_buf = bytearray(MAX_PAYLOAD_SIZE)
+            else:
+                ## skip empty payload
+                new_parse_state = MSG_PARSE_DONE
+        self.parse_state = new_parse_state
+        self.parse_substate = 0
+
+    def _parse_header(self, data, data_ofs, data_len):
+        while data_ofs < data_len and self.parse_state < MSG_PARSE_PAYLOAD:
+            data_byte = data[data_ofs]
+            data_ofs += 1
+            if self.parse_state == MSG_PARSE_START:
+                self.op_code = data_byte & WS_OP_CODE_BITS
+                self.fin_flag = bool(data_byte & WS_FIN_BIT)
+                self._set_parse_state(MSG_PARSE_LEN7)
+            elif self.parse_state == MSG_PARSE_LEN7:
+                self.payload_masked = bool(data_byte & WS_MASKED_BIT)
+                self.payload_len = 0
+                payload_len = data_byte & WS_PAYLOAD_BITS
+                if payload_len == 0:
+                    self._set_parse_state(MSG_PARSE_DONE)
+                elif payload_len < 126:
+                    self.payload_len = payload_len
+                    self._set_parse_state(MSG_PARSE_MASK)
+                elif payload_len == 126:
+                    self._set_parse_state(MSG_PARSE_LEN16)
+                else:
+                    self._set_parse_state(MSG_PARSE_LEN64)
+            elif self.parse_state == MSG_PARSE_LEN16 or self.parse_state == MSG_PARSE_LEN64:
+                self.payload_len = self.payload_len << 8 | data_byte
+                self.parse_substate += 1
+                if (self.parse_state == MSG_PARSE_LEN16 and self.parse_substate == 2) or \
+                        (self.parse_state == MSG_PARSE_LEN64 and self.parse_substate == 8):
+                    self._set_parse_state(MSG_PARSE_MASK)
+            elif self.parse_state == MSG_PARSE_MASK:
+                self.payload_mask[self.parse_substate] = data_byte
+                self.parse_substate += 1
+                if self.parse_substate == 4:
+                    self._set_parse_state(MSG_PARSE_PAYLOAD)
+            else:
+                raise Exception(f'unexpected parse_state {self.parse_state} in WebSocket parser')
+        return data_ofs
+
+    def _parse_payload(self, data, data_ofs, data_len):
+        n_consumed = min(self.payload_len - self.payload_cursor, data_len - data_ofs)
+        payload_buf = self.payload_buf
+        if payload_buf is not None:
+            payload_cursor = self.payload_cursor
+            if self.payload_masked:
+                payload_mask = self.payload_mask
+                for data_cursor in range(data_ofs, data_ofs + n_consumed):
+                    unmasked_byte = data[data_cursor] ^ payload_mask[payload_cursor % 4]
+                    payload_buf[payload_cursor] = unmasked_byte
+                    payload_cursor += 1
+            else:
+                payload_buf[payload_cursor : payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
+        self.payload_cursor += n_consumed
+        if self.payload_cursor == self.payload_len:
+            self._set_parse_state(MSG_PARSE_DONE)
+        return data_ofs + n_consumed
+
+class WebSocketClient(Pollable):
+    def __init__(self, ws_server):
+        super().__init__(ws_server.server)
+        self.ws_server = ws_server              ## WebSocketServer, the server that created this instance
+        self.sock_recv_buf = bytearray(65536)   ## fixed buffer for socket.recv_into()
+        self.decoder = WsHandshakeDecoder(self) ## either WsHandshakeDecoder or WsMessageDecoder
+        self.sock = None                        ## socket, TCP client socket accepted by WebSocketServer
+        self.addr = None                        ## string, remote client address "IP:PORT"
+        self.nbe_data = None                    ## opaque pointer reserved for NetworkBackend
+        self.out = collections.deque()          ## data chunks queued for sending to self.sock
+        self.last_recv_tm = time.time()         ## int, most recent time any data was received from self.sock
+        self.last_ping_tm = self.last_recv_tm   ## int, most recent time a PING was sent to self.sock
+        self.closing = False                    ## bool, close connection as soon as self.out is drained
+
+    def open(self, sock, addr):
+        self.sock = sock
+        self.addr = f'{addr[0]}:{addr[1]}'
+        super().open(sock.fileno())
+
+    def close(self, reason='unknown'):
+        super().close()
+        self.netbe.detach_ws_client(self)
+        self.ws_server.remove_client(self)
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+            logger.info(f'{self.addr}: connection closed, reason: {reason}')
+
+    def handle_ws_handshake(self, handshake_key):
+        ## called by WsHandshakeDecoder.decode()
+        ## send handshake response
+        raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
         sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
         sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
-        response_bytes = b'\r\n'.join([
+        self.out.append(b'\r\n'.join([
             b'HTTP/1.1 101 Switching Protocols',
             b'Connection: Upgrade',
             b'Upgrade: websocket',
-            b'Sec-WebSocket-Version: 13',
             b'Sec-WebSocket-Accept: ' + sec_websocket_accept,
-            b'', b'' ])
-        self.out.append(response_bytes)
+            b'', b'' ]))
+        self.wants_send(True)
+        ## accept WebScocket connection
+        self.decoder = WsMessageDecoder(self)
+        self.netbe.attach_ws_client(self)
+        logger.info(f'{self.addr}: accepted WebSocket client connection')
+
+    def handle_ws_message(self, op_code, payload_buf, payload_len):
+        ## called by WsMessageDecoder.decode()
+        if op_code == OP_CODE_BIN_MSG:
+            if payload_buf is not None:
+                # TODO: pass self.payload_len to forward_from_ws_client() instead of subarray
+                self.netbe.forward_from_ws_client(self, payload_buf[ : payload_len ])
+        elif op_code == OP_CODE_CLOSE:
+            logger.debug(f'{self.addr}: received CLOSE from WebSocket client, replying with CLOSE before closing')
+            self._send_ws_message(OP_CODE_CLOSE, None, 0)
+            self.closing = True
+        elif op_code == OP_CODE_PING:
+            logger.debug(f'{self.addr}: received PING from WebSocket client, replying with PONG')
+            self._send_ws_message(OP_CODE_PONG, payload_buf, payload_len)
+        elif op_code == OP_CODE_PONG:
+            logger.debug(f'{self.addr}: received PONG from WebSocket client')
+        else:
+            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} '
+                f'len={payload_len} payload={payload_buf[:payload_len]}')
+
+    def _send_ws_message(self, op_code, payload_buf, payload_len):
+        if payload_len < 126:
+            self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
+        else:
+            self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
+        if payload_len:
+            self.out.append(payload_buf)
         self.wants_send(True)
 
-    def _handle_websocket_message(self, ws_msg, ws_msg_len):
-        msg_byte = ws_msg[0]
-        flag_fin = bool(msg_byte & FLAG_FIN)
-        op_code = msg_byte & 0x0F
-        msg_byte = ws_msg[1]
-        flag_masked = bool(msg_byte & FLAG_MASKED)
-        self.payload_len = msg_byte & 0x7F
-        cursor = 2
-        if self.payload_len > 125:
-            if self.payload_len == 126:    ## unsigned short (16 bit)
-                self.payload_len = struct.unpack_from('!H', ws_msg, offset=cursor)[0]
-                cursor += 2
-            else:
-                ## length is of type unsigned long long (64 bit)
-                self.payload_len = struct.unpack_from('!Q', ws_msg, offset=cursor)[0]
-                cursor += 8
-        mask_bytes = None
-        if flag_masked:
-            mask_bytes = ws_msg[ cursor : cursor + 4 ]
-            cursor += 4
+    def send(self, eth_frame):
+        if self.sock is not None:
+            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame, len(eth_frame))
 
-        self.recv_buffer = bytearray(16384)
-        self.recv_cursor = 0
+    def send_ready(self):
+        if self.sock is None:
+            return
+        try:
+            self.sock.sendmsg(self.out)
+            self.out.clear()
+        except OSError as e:
+            self.close(f'error in socket.sendmsg(): {e}')
+        else:
+            self.wants_send(False)
+            if self.closing:
+                self.close('closed by client')
 
-        n_remaining = min(self.payload_len - self.recv_cursor, ws_msg_len - cursor)
-        for msg_ofs in range(cursor, cursor + n_remaining):
-            unmasked_byte = ws_msg[msg_ofs] ^ mask_bytes[self.recv_cursor % 4]
-            self.recv_buffer[self.recv_cursor] = unmasked_byte
-            self.recv_cursor += 1
+    def recv_ready(self):
+        recv_buf = self.sock_recv_buf
+        try:
+            while self.sock:
+                recv_len = self.sock.recv_into(recv_buf)
+                if recv_len <= 0:
+                    break
+                self.decoder.decode(recv_buf, recv_len)
+                self.last_recv_tm = time.time()
+        except BlockingIOError:
+            pass
+        except OSError as e:
+            self.close(f'error in socket.recv_into(): {e}')
 
-        if self.recv_cursor == self.payload_len:
-            if op_code == OP_CODE_BINARY_MSG:
-                #log_eth_frame('ws->nbe', self.recv_buffer, logger)
-                # TODO: pass self.payload_len to forward_from_ws_client() instead of subarray
-                self.netbe.forward_from_ws_client(self, self.recv_buffer[ : self.payload_len ])
-            elif op_code == OP_CODE_CLOSE:
-                # TODO: WebSocket close handshake
-                self.close()
-            else:
-                logger.info(f'STATE_CONNECTED: fin={flag_fin} op_code={op_code} masked={flag_masked} '
-                    f'payload_len={self.payload_len} ws_msg_len={ws_msg_len} cursor={cursor}')
-            self.payload_len = None
-            self.recv_buffer = None
-            self.recv_cursor = None
+    def refresh(self, tm_now):
+        if tm_now - self.last_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
+            self.last_ping_tm = tm_now
+            self._send_ws_message(OP_CODE_PING, b'PING', 4)
+            logger.debug(f'{self.addr}: sent PING to idle WebSocket client')
 
 class WebSocketServer(Pollable):
     def __init__(self, server):
@@ -244,7 +324,7 @@ class WebSocketServer(Pollable):
         ws_clients = self.ws_clients
         self.ws_clients = set()
         for ws_client in ws_clients:
-            ws_client.close()
+            ws_client.close('server shutdown')
         if self.sock:
             self.sock.close()
             self.sock = None
