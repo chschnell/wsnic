@@ -16,11 +16,11 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 * passes IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a Linux network and an open number of WebSocket clients
 * creates a single [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network device using Network Address Translation (NAT) to grant Internet-access to WebSocket guests
-* uses the [sans-io WebSocket](https://websockets.readthedocs.io/en/stable/reference/sansio/server.html) server protocol implementation from [websockets](https://websockets.readthedocs.io/en/stable/)
 * supports WebSocket Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
 * uses [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html) to provide DHCP and DNS services to WebSocket guests
 * uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all sockets and network devices
 * sends periodic PINGs to idle WebSocket clients
+* has no external Python dependencies
 * see section [How it works](#how-it-works) for more details
 
 ## Docker installation
@@ -122,20 +122,16 @@ sudo systemctl disable dnsmasq
 
 NOTE: `stunnel` is only required for `wss://` support and otherwise not needed.
 
-Next, clone a working copy of this repository and install `websockets` into it using `pip`:
+Next, clone a working copy of this repository:
 
 ```bash
 git clone https://github.com/chschnell/wsnic.git
-
-cd wsnic
-python3 -m venv venv
-venv/bin/pip3 install websockets
-cd ..
 ```
 
 Finally, run wsnic using:
 
 ```bash
+cd wsnic
 sudo ./wsnic.sh [WSNIC-OPTIONS]
 ```
 

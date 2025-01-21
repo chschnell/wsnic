@@ -5,7 +5,6 @@
 
 import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil, subprocess
 
-#from wsnic.websock import WebSocketServer
 from wsnic.websocksrv import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
@@ -271,7 +270,6 @@ def main():
     elif args.quiet:
         log_level = logging.WARNING
     logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s %(name)s: %(message)s', datefmt='%H:%M:%S')
-    logging.getLogger('websockets').setLevel(logging.WARNING)   ## suppress INFO and DEBUG log messages in websockets library
 
     config = WsnicConfig(args)
 

@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
-venv/bin/python3 -m wsnic $@
+exec python3 -m wsnic $@
