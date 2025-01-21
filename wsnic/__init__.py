@@ -142,10 +142,10 @@ class FrameQueue:
         return len(self.queue) == 0
 
     def append(self, data):
-        self.queue.appendleft(data)
+        self.queue.append(data)
 
     def get_frame(self):
-        return self.queue.pop() if len(self.queue) else None
+        return self.queue.popleft() if len(self.queue) else None
 
 class NetworkBackend:
     def __init__(self, server):
