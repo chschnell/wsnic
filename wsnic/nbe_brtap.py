@@ -42,18 +42,14 @@ class BridgedTapNetworkBackend(NetworkBackend):
         if self.is_opened:
             return
         self.is_opened = True
-
         logger.info(f'creating bridge {self.br_iface}')
-
         ## create bridge with manually fixed MAC address, see https://superuser.com/a/1725894
         run = Exec(logger, check=True)
         run(f'ip link add dev {self.br_iface} address {mac2str(random_private_mac())} type bridge')
         run(f'ip addr add dev {self.br_iface} {self.config.server_addr}/{self.config.netmask} brd +')
         run(f'ip link set dev {self.br_iface} up')
-
         ## setup bridge NAT rules
         self._install_nat_rules(True)
-
         ## install DHCP server on bridge interface
         if not self.config.disable_dhcp:
             self.dhcp_server = Dnsmasq(self.server)
@@ -75,7 +71,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         ## given newly accepted WebSocketClient ws_client to each other:
         ## - ws_client.nbe_data points to tap_device
         ## - tap_device.ws_client points to ws_client
-        tap_device = self._create_pollable(ws_client)
+        tap_device = BridgedTapDevice(self.server, ws_client)
         tap_device.open()
         ws_client.nbe_data = tap_device
 
@@ -86,9 +82,6 @@ class BridgedTapNetworkBackend(NetworkBackend):
 
     def forward_from_ws_client(self, ws_client, eth_frame, eth_frame_len):
         ws_client.nbe_data.send_frame(eth_frame, eth_frame_len)
-
-    def _create_pollable(self, ws_client):
-        return BridgedTapDevice(self.server, ws_client)
 
 class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
@@ -102,10 +95,8 @@ class BridgedTapDevice(Pollable):
         ## create and open ws_client's TAP device
         self.fd, self.tap_iface = open_tap('wstap%d')
         super().open(self.fd)
-
         ## attach TAP device to bridge and bring it up
         Exec(logger, check=True)(f'ip link set dev {self.tap_iface} master {self.br_iface} up')
-
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
     def close(self):
@@ -118,15 +109,16 @@ class BridgedTapDevice(Pollable):
     def recv_ready(self):
         try:
             while self.fd:
-                eth_frame = os.read(self.fd, 65535)
-                self.ws_client.send_frame(eth_frame, len(eth_frame))
+                eth_frame = bytearray(16384)
+                eth_frame_len = os.readv(self.fd, [eth_frame])
+                self.ws_client.send_frame(eth_frame, eth_frame_len)
         except BlockingIOError:
-            ## os.read() has had no data to return
+            ## no data available to read
             pass
 
     def send_ready(self):
-        while self.fd and len(self.out):
-            os.write(self.fd, self.out.popleft())
+        os.writev(self.fd, self.out)
+        self.out.clear()
         self.wants_send(False)
 
     def send_frame(self, eth_frame, eth_frame_len):
