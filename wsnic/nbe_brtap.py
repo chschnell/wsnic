@@ -6,9 +6,9 @@
 ## - Tap networking with QEMU
 ##   https://wiki.archlinux.org/title/QEMU#Tap_networking_with_QEMU
 
-import os, logging
+import os, logging, collections
 
-from wsnic import NetworkBackend, Pollable, FrameQueue, Exec, mac2str, random_private_mac
+from wsnic import NetworkBackend, Pollable, Exec, mac2str, random_private_mac
 from wsnic.dnsmasq import Dnsmasq
 from wsnic.tuntap import open_tap
 
@@ -94,7 +94,7 @@ class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
         super().__init__(server)
         self.ws_client = ws_client            ## WebSocketClient, the ws_client associated to this TAP device
-        self.out = FrameQueue()               ## frames waiting to be send to the TAP device
+        self.out = collections.deque()        ## data chunks queued for sending to the TAP device self.fd
         self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsbr0'
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
@@ -125,8 +125,8 @@ class BridgedTapDevice(Pollable):
             pass
 
     def send_ready(self):
-        while self.fd and not self.out.is_empty():
-            os.write(self.fd, self.out.get_frame())
+        while self.fd and len(self.out):
+            os.write(self.fd, self.out.popleft())
         self.wants_send(False)
 
     def send_frame(self, eth_frame, eth_frame_len):

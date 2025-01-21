@@ -6,7 +6,6 @@
 import os, logging, random, subprocess, struct
 
 from select import EPOLLIN, EPOLLOUT
-from collections import deque
 
 def mac2str(mac):
     mac = mac.hex()
@@ -136,19 +135,6 @@ class Pollable:
         ## called in periodic intervals for housekeeping purposes
         ## only implemented by WebSocketClient
         pass
-
-class FrameQueue:
-    def __init__(self):
-        self.queue = deque()
-
-    def is_empty(self):
-        return len(self.queue) == 0
-
-    def append(self, data):
-        self.queue.append(data)
-
-    def get_frame(self):
-        return self.queue.popleft() if len(self.queue) else None
 
 class NetworkBackend:
     def __init__(self, server):
