@@ -261,7 +261,10 @@ class WebSocketClient(Pollable):
         else:
             self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
         if payload_len:
-            self.out.append(payload_buf)
+            if payload_len == len(payload_buf):
+                self.out.append(payload_buf)
+            else:
+                self.out.append(payload_buf[ : payload_len ])
         self.wants_send(True)
 
     def send_frame(self, eth_frame, eth_frame_len):
