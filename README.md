@@ -17,7 +17,7 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 * creates a single virtual [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network using NAT masquerading to grant Internet-access to WebSocket guests
 * supports WebSocket Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
-* provides DHCP/DNS services to WebSocket guests by offloading to [`dnsmasq`](https://thekelleys.org.uk/dnsmasq/doc.html)
+* provides DHCP/DNS services to WebSocket guests by offloading to [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
 * sends periodic PINGs to idle WebSocket clients
 * written in Python3 with no external dependencies, uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all I/O
 * see section [How it works](#how-it-works) for more details
