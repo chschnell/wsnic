@@ -75,9 +75,13 @@ class WebSocketClient(Pollable):
             self.wants_send(True)
 
     def send_ready(self):
+        if self.sock is None:
+            return
+        gathered_fragments = []
+        while not self.out.is_empty():
+            gathered_fragments.extend(self.out.get_frame())
         try:
-            while self.sock and not self.out.is_empty():
-                self.sock.sendmsg(self.out.get_frame())
+            self.sock.sendmsg(gathered_fragments)
         except OSError as e:
             self.close()
             logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
