@@ -1,13 +1,13 @@
 ##
-## websocksrv.py
-## WebSocket Server class.
+## websock.py
+## WebSocket Server classes.
 ##
 
 import logging, collections, socket, time, struct, base64, hashlib
 
 from wsnic import Pollable
 
-logger = logging.getLogger('websocksrv')
+logger = logging.getLogger('websock')
 
 class WsHandshakeDecoder:
     def __init__(self, ws_client):
