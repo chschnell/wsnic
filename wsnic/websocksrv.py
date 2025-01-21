@@ -68,20 +68,18 @@ class WebSocketClient(Pollable):
             #log_eth_frame('nbe->ws', eth_frame, logger)
             payload_len = len(eth_frame)
             if payload_len < 126:
-                ws_header = struct.pack(f'!BB', OP_CODE_BINARY_MSG | FLAG_FIN, payload_len)
+                self.out.append(struct.pack(f'!BB', OP_CODE_BINARY_MSG | FLAG_FIN, payload_len))
             else:
-                ws_header = struct.pack(f'!BBH', OP_CODE_BINARY_MSG | FLAG_FIN, 126, payload_len)
-            self.out.append([ws_header, eth_frame])
+                self.out.append(struct.pack(f'!BBH', OP_CODE_BINARY_MSG | FLAG_FIN, 126, payload_len))
+            self.out.append(eth_frame)
             self.wants_send(True)
 
     def send_ready(self):
         if self.sock is None:
             return
-        gathered_fragments = []
-        while not self.out.is_empty():
-            gathered_fragments.extend(self.out.get_frame())
         try:
-            self.sock.sendmsg(gathered_fragments)
+            self.sock.sendmsg(self.out.queue)
+            self.out.queue.clear()
         except OSError as e:
             self.close()
             logger.debug(f'{self.addr}: WebSocket client disconnected at send(), reason: {e}')
@@ -177,7 +175,7 @@ class WebSocketClient(Pollable):
             b'Sec-WebSocket-Version: 13',
             b'Sec-WebSocket-Accept: ' + sec_websocket_accept,
             b'', b'' ])
-        self.out.append([response_bytes])
+        self.out.append(response_bytes)
         self.wants_send(True)
 
     def _handle_websocket_message(self, ws_msg, ws_msg_len):
