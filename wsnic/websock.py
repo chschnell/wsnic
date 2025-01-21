@@ -64,7 +64,7 @@ class WsHandshakeDecoder:
                 if header_name == b'sec-websocket-key':
                     handshake_key = header_value
                 else:
-                    hs_upgrade_websocket = b'websocket' in header_value 
+                    hs_upgrade_websocket = b'websocket' in header_value.lower()
             cursor = eol_ofs + 2
 
         if hs_upgrade_websocket and handshake_key is not None:
