@@ -7,7 +7,7 @@ import logging, collections, socket, time, struct, base64, hashlib
 
 from wsnic import Pollable
 
-logger = logging.getLogger('websock')
+logger = logging.getLogger('websocksrv')
 
 class WsHandshakeDecoder:
     def __init__(self, ws_client):
