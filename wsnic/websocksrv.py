@@ -45,9 +45,8 @@ class WebSocketClient(Pollable):
         self.recv_buffer = None               ## bytearray[payload_len], current payload data
         self.recv_cursor = None               ## int, cursor into recv_buffer[]
 
-        ## members maintained by NetworkBackend (TODO: turn into single opaque member "nbe_data")
-        self.mac_addr = None                  ## bytes, this client's MAC address
-        self.pkt_sink = None                  ## Pollable, this client's separate packet sink
+        ## opaque pointer reserved for NetworkBackend state
+        self.nbe_data = None
 
     def open(self, sock, addr):
         self.sock = sock

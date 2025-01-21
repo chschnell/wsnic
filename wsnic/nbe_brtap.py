@@ -73,19 +73,19 @@ class BridgedTapNetworkBackend(NetworkBackend):
     def attach_ws_client(self, ws_client):
         ## Create a new BridgedTapDevice tap_device and link it and the
         ## given newly accepted WebSocketClient ws_client to each other:
-        ## - ws_client.pkt_sink points to tap_device
+        ## - ws_client.nbe_data points to tap_device
         ## - tap_device.ws_client points to ws_client
         tap_device = self._create_pollable(ws_client)
         tap_device.open()
-        ws_client.pkt_sink = tap_device
+        ws_client.nbe_data = tap_device
 
     def detach_ws_client(self, ws_client):
-        if ws_client.pkt_sink:
-            ws_client.pkt_sink.close()
-            ws_client.pkt_sink = None
+        if ws_client.nbe_data:
+            ws_client.nbe_data.close()
+            ws_client.nbe_data = None
 
     def forward_from_ws_client(self, ws_client, eth_frame):
-        ws_client.pkt_sink.send(eth_frame)
+        ws_client.nbe_data.send(eth_frame)
 
     def _create_pollable(self, ws_client):
         return BridgedTapDevice(self.server, ws_client)
