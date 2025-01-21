@@ -252,8 +252,7 @@ class WebSocketClient(Pollable):
         elif op_code == OP_CODE_PONG:
             logger.debug(f'{self.addr}: received PONG from WebSocket client')
         else:
-            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} '
-                f'len={payload_len} payload={payload_buf[:payload_len]}')
+            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={payload_len}')
 
     def _send_ws_message(self, op_code, payload_buf, payload_len):
         if payload_len < 126:
