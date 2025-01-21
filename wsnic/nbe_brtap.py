@@ -84,8 +84,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
             ws_client.nbe_data.close()
             ws_client.nbe_data = None
 
-    def forward_from_ws_client(self, ws_client, eth_frame):
-        ws_client.nbe_data.send(eth_frame)
+    def forward_from_ws_client(self, ws_client, eth_frame, eth_frame_len):
+        ws_client.nbe_data.send_frame(eth_frame, eth_frame_len)
 
     def _create_pollable(self, ws_client):
         return BridgedTapDevice(self.server, ws_client)
@@ -118,7 +118,8 @@ class BridgedTapDevice(Pollable):
     def recv_ready(self):
         try:
             while self.fd:
-                self.ws_client.send(os.read(self.fd, 65535))
+                eth_frame = os.read(self.fd, 65535)
+                self.ws_client.send_frame(eth_frame, len(eth_frame))
         except BlockingIOError:
             ## os.read() has had no data to return
             pass
@@ -128,8 +129,7 @@ class BridgedTapDevice(Pollable):
             os.write(self.fd, self.out.get_frame())
         self.wants_send(False)
 
-    def send(self, eth_frame):
-        if len(eth_frame):
-            if self.out.is_empty():
-                self.wants_send(True)
-            self.out.append(eth_frame)
+    def send_frame(self, eth_frame, eth_frame_len):
+        if eth_frame_len:
+            self.wants_send(True)
+            self.out.append(eth_frame[ : eth_frame_len ])

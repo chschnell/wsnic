@@ -241,8 +241,7 @@ class WebSocketClient(Pollable):
         ## called by WsMessageDecoder.decode()
         if op_code == OP_CODE_BIN_MSG:
             if payload_buf is not None:
-                # TODO: pass self.payload_len to forward_from_ws_client() instead of subarray
-                self.netbe.forward_from_ws_client(self, payload_buf[ : payload_len ])
+                self.netbe.forward_from_ws_client(self, payload_buf, payload_len)
         elif op_code == OP_CODE_CLOSE:
             logger.debug(f'{self.addr}: received CLOSE from WebSocket client, replying with CLOSE before closing')
             self._send_ws_message(OP_CODE_CLOSE, None, 0)
@@ -265,9 +264,9 @@ class WebSocketClient(Pollable):
             self.out.append(payload_buf)
         self.wants_send(True)
 
-    def send(self, eth_frame):
+    def send_frame(self, eth_frame, eth_frame_len):
         if self.sock is not None:
-            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame, len(eth_frame))
+            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame, eth_frame_len)
 
     def send_ready(self):
         if self.sock is None:

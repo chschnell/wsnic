@@ -127,11 +127,14 @@ class Pollable:
         ## called when wants_send is True and self.fd is clear to send
         pass
 
-    def send(self, eth_frame):
+    def send_frame(self, eth_frame, eth_frame_len):
+        ## send eth_frame[0 : eth_frame_len] to underlying device
+        ## only implemented by WebSocketClient and BridgedTapDevice
         pass
 
     def refresh(self, tm_now):
-        ## called in periodic intervals
+        ## called in periodic intervals for housekeeping purposes
+        ## only implemented by WebSocketClient
         pass
 
 class FrameQueue:
@@ -159,13 +162,13 @@ class NetworkBackend:
         pass
 
     def attach_ws_client(self, ws_client):
-        ## called by WebSocketClient.recv() after the WebSocket handshake completed
+        ## called by WebSocketClient.handle_ws_handshake() after the WebSocket handshake completed
         pass
 
     def detach_ws_client(self, ws_client):
-        ## called by WebSocketClient.close(), even if attach_ws_client() was never called (must be idempotent)
+        ## called by WebSocketClient.close(), even if attach_ws_client() was never called
         pass
 
-    def forward_from_ws_client(self, ws_client, eth_frame):
-        ## Called by WebSocketClient.recv() when a new eth_frame has arrived
+    def forward_from_ws_client(self, ws_client, eth_frame, eth_frame_len):
+        ## called by WebSocketClient.handle_ws_message() when a new eth_frame has arrived
         pass
