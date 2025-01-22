@@ -20,14 +20,16 @@ class WsHandshakeDecoder:
         if header_len < 0:
             self.request_buffer.extend(data[ : data_len ])
         elif len(self.request_buffer):
-            header_len += len(self.request_buffer)
             self.request_buffer.extend(data[ : data_len ])
-            handshake_key = self._parse_handshake_request(self.request_buffer, header_len)
+            handshake_key = self._parse_handshake_request(self.request_buffer, len(self.request_buffer))
             self.request_buffer.clear()
         else:
             handshake_key = self._parse_handshake_request(data, header_len)
         if handshake_key:
-            self.ws_client.handle_ws_handshake(handshake_key)
+            raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
+            sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
+            sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
+            self.ws_client.handle_ws_handshake(sec_websocket_accept)
 
     def _parse_handshake_request(self, data, data_len):
         hs_upgrade_websocket = False    ## True if header "Upgrade: websocket\r\n" exists
@@ -114,6 +116,10 @@ class WsMessageDecoder:
             if self.parse_state == MSG_PARSE_PAYLOAD:
                 data_ofs = self._parse_payload(data, data_ofs, data_len)
             if self.parse_state == MSG_PARSE_DONE:
+                """
+                if self.payload_masked and self.payload_buf:
+                    self._unmask_payload()
+                """
                 self.ws_client.handle_ws_message(self.op_code, self.payload_buf)
                 self.payload_buf = None
                 self._set_parse_state(MSG_PARSE_START)
@@ -175,21 +181,38 @@ class WsMessageDecoder:
 
     def _parse_payload(self, data, data_ofs, data_len):
         n_consumed = min(self.payload_len - self.payload_cursor, data_len - data_ofs)
-        payload_buf = self.payload_buf
-        if payload_buf is not None:
-            payload_cursor = self.payload_cursor
+        if self.payload_buf is not None:
+            """
+            self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
+            """
             if self.payload_masked:
+                payload_buf = self.payload_buf
                 payload_mask = self.payload_mask
+                payload_cursor = self.payload_cursor
                 for data_cursor in range(data_ofs, data_ofs + n_consumed):
-                    unmasked_byte = data[data_cursor] ^ payload_mask[payload_cursor % 4]
-                    payload_buf[payload_cursor] = unmasked_byte
+                    payload_buf[payload_cursor] = data[data_cursor] ^ payload_mask[payload_cursor % 4]
                     payload_cursor += 1
             else:
-                payload_buf[payload_cursor : payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
+                self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
         self.payload_cursor += n_consumed
         if self.payload_cursor == self.payload_len:
             self._set_parse_state(MSG_PARSE_DONE)
         return data_ofs + n_consumed
+
+    def _unmask_payload(self):
+        payload_buf = self.payload_buf
+        payload_len = self.payload_len
+        payload_mask = self.payload_mask
+        # naive:
+        # for i in range(payload_len):
+        #    payload_buf[i] ^= payload_mask[i % 4]
+        payload_len32 = (payload_len >> 2) << 2
+        payload_view32 = memoryview(payload_buf)[ : payload_len32].cast('I')
+        payload_mask32 = struct.unpack_from('I', payload_mask)[0]
+        for i32 in range(payload_len32 >> 2):
+            payload_view32[i32] ^= payload_mask32
+        for i in range(payload_len - payload_len32):
+            payload_buf[payload_len32 + i] ^= payload_mask[i]
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
@@ -219,12 +242,9 @@ class WebSocketClient(Pollable):
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
 
-    def handle_ws_handshake(self, handshake_key):
+    def handle_ws_handshake(self, sec_websocket_accept):
         ## called by WsHandshakeDecoder.decode()
         ## send handshake response
-        raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
-        sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
-        sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
         self.out.append(b'\r\n'.join([
             b'HTTP/1.1 101 Switching Protocols',
             b'Connection: Upgrade',
@@ -232,7 +252,7 @@ class WebSocketClient(Pollable):
             b'Sec-WebSocket-Accept: ' + sec_websocket_accept,
             b'', b'' ]))
         self.wants_send(True)
-        ## accept WebScocket connection
+        ## accept WebSocket connection
         self.decoder = WsMessageDecoder(self)
         self.netbe.attach_ws_client(self)
         logger.info(f'{self.addr}: accepted WebSocket client connection')
