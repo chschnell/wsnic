@@ -5,7 +5,7 @@
 
 import logging, collections, socket, time, struct, base64, hashlib
 
-from wsnic import Pollable
+from wsnic import Pollable, MAX_PAYLOAD_SIZE
 
 logger = logging.getLogger('websock')
 
@@ -93,8 +93,6 @@ MSG_PARSE_MASK    = 4
 MSG_PARSE_PAYLOAD = 5
 MSG_PARSE_DONE    = 6
 
-MAX_PAYLOAD_SIZE = 16384
-
 class WsMessageDecoder:
     def __init__(self, ws_client):
         self.ws_client = ws_client         ## parent WebSocketClient
@@ -111,12 +109,12 @@ class WsMessageDecoder:
     def decode(self, data, data_len):
         data_ofs = 0
         while data_ofs < data_len:
-            if self.parse_state != MSG_PARSE_PAYLOAD:
+            if self.parse_state < MSG_PARSE_PAYLOAD:
                 data_ofs = self._parse_header(data, data_ofs, data_len)
             if self.parse_state == MSG_PARSE_PAYLOAD:
                 data_ofs = self._parse_payload(data, data_ofs, data_len)
             if self.parse_state == MSG_PARSE_DONE:
-                self.ws_client.handle_ws_message(self.op_code, self.payload_buf, self.payload_len)
+                self.ws_client.handle_ws_message(self.op_code, self.payload_buf)
                 self.payload_buf = None
                 self._set_parse_state(MSG_PARSE_START)
 
@@ -126,11 +124,13 @@ class WsMessageDecoder:
             new_parse_state = MSG_PARSE_PAYLOAD
         if new_parse_state == MSG_PARSE_PAYLOAD:
             self.payload_cursor = 0
-            if self.payload_len > MAX_PAYLOAD_SIZE:
-                ## drop oversized payload
-                self.payload_buf = None
-            elif self.payload_len > 0:
-                self.payload_buf = bytearray(MAX_PAYLOAD_SIZE)
+            if self.payload_len:
+                if self.payload_len <= MAX_PAYLOAD_SIZE:
+                    ## accept payload
+                    self.payload_buf = bytearray(self.payload_len)
+                else:
+                    ## drop oversized payload
+                    self.payload_buf = None
             else:
                 ## skip empty payload
                 new_parse_state = MSG_PARSE_DONE
@@ -148,7 +148,7 @@ class WsMessageDecoder:
             elif self.parse_state == MSG_PARSE_LEN7:
                 self.payload_masked = bool(data_byte & WS_MASKED_BIT)
                 self.payload_len = 0
-                payload_len = data_byte & WS_PAYLOAD_BITS
+                payload_len = data_byte & WS_PAYLOAD_BITS   ## payload_len: 0 ... 127
                 if payload_len == 0:
                     self._set_parse_state(MSG_PARSE_DONE)
                 elif payload_len < 126:
@@ -237,38 +237,36 @@ class WebSocketClient(Pollable):
         self.netbe.attach_ws_client(self)
         logger.info(f'{self.addr}: accepted WebSocket client connection')
 
-    def handle_ws_message(self, op_code, payload_buf, payload_len):
+    def handle_ws_message(self, op_code, payload_buf):
         ## called by WsMessageDecoder.decode()
         if op_code == OP_CODE_BIN_MSG:
             if payload_buf is not None:
-                self.netbe.forward_from_ws_client(self, payload_buf, payload_len)
+                self.netbe.forward_from_ws_client(self, payload_buf)
         elif op_code == OP_CODE_CLOSE:
             logger.debug(f'{self.addr}: received CLOSE from WebSocket client, replying with CLOSE before closing')
-            self._send_ws_message(OP_CODE_CLOSE, None, 0)
+            self._send_ws_message(OP_CODE_CLOSE, None)
             self.closing = True
         elif op_code == OP_CODE_PING:
             logger.debug(f'{self.addr}: received PING from WebSocket client, replying with PONG')
-            self._send_ws_message(OP_CODE_PONG, payload_buf, payload_len)
+            self._send_ws_message(OP_CODE_PONG, payload_buf)
         elif op_code == OP_CODE_PONG:
             logger.debug(f'{self.addr}: received PONG from WebSocket client')
         else:
-            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={payload_len}')
+            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
 
-    def _send_ws_message(self, op_code, payload_buf, payload_len):
+    def _send_ws_message(self, op_code, payload_buf):
+        payload_len = len(payload_buf) if payload_buf else 0
         if payload_len < 126:
             self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
         else:
             self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
         if payload_len:
-            if payload_len == len(payload_buf):
-                self.out.append(payload_buf)
-            else:
-                self.out.append(payload_buf[ : payload_len ])
+            self.out.append(payload_buf)
         self.wants_send(True)
 
-    def send_frame(self, eth_frame, eth_frame_len):
+    def send_frame(self, eth_frame):
         if self.sock is not None:
-            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame, eth_frame_len)
+            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame)
 
     def send_ready(self):
         if self.sock is None:
@@ -293,6 +291,7 @@ class WebSocketClient(Pollable):
                 self.decoder.decode(recv_buf, recv_len)
                 self.last_recv_tm = time.time()
         except BlockingIOError:
+            ## no data available to read
             pass
         except OSError as e:
             self.close(f'error in socket.recv_into(): {e}')
@@ -300,7 +299,7 @@ class WebSocketClient(Pollable):
     def refresh(self, tm_now):
         if tm_now - self.last_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
             self.last_ping_tm = tm_now
-            self._send_ws_message(OP_CODE_PING, b'PING', 4)
+            self._send_ws_message(OP_CODE_PING, b'PING')
             logger.debug(f'{self.addr}: sent PING to idle WebSocket client')
 
 class WebSocketServer(Pollable):

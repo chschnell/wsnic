@@ -7,6 +7,12 @@ import os, logging, random, subprocess, struct
 
 from select import EPOLLIN, EPOLLOUT
 
+## Ethernet frames usually do net exceed 1514 bytes in length (14 bytes
+## header + 1500 data), jumbo frames however go up to 9014 bytes.
+## Payloads that exceed MAX_PAYLOAD_SIZE are dropped by wsnic.
+##
+MAX_PAYLOAD_SIZE = 16384
+
 def mac2str(mac):
     mac = mac.hex()
     return ':'.join([mac[i:i+2] for i in range(0, len(mac), 2)])
@@ -126,8 +132,8 @@ class Pollable:
         ## called when wants_send is True and self.fd is clear to send
         pass
 
-    def send_frame(self, eth_frame, eth_frame_len):
-        ## send eth_frame[0 : eth_frame_len] to underlying device
+    def send_frame(self, eth_frame):
+        ## send eth_frame to underlying device
         ## only implemented by WebSocketClient and BridgedTapDevice
         pass
 
@@ -155,6 +161,6 @@ class NetworkBackend:
         ## called by WebSocketClient.close(), even if attach_ws_client() was never called
         pass
 
-    def forward_from_ws_client(self, ws_client, eth_frame, eth_frame_len):
+    def forward_from_ws_client(self, ws_client, eth_frame):
         ## called by WebSocketClient.handle_ws_message() when a new eth_frame has arrived
         pass

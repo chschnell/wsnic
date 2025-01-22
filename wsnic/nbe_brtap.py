@@ -8,7 +8,7 @@
 
 import os, logging, collections
 
-from wsnic import NetworkBackend, Pollable, Exec, mac2str, random_private_mac
+from wsnic import NetworkBackend, Pollable, Exec, mac2str, random_private_mac, MAX_PAYLOAD_SIZE
 from wsnic.dnsmasq import Dnsmasq
 from wsnic.tuntap import open_tap
 
@@ -80,8 +80,8 @@ class BridgedTapNetworkBackend(NetworkBackend):
             ws_client.nbe_data.close()
             ws_client.nbe_data = None
 
-    def forward_from_ws_client(self, ws_client, eth_frame, eth_frame_len):
-        ws_client.nbe_data.send_frame(eth_frame, eth_frame_len)
+    def forward_from_ws_client(self, ws_client, eth_frame):
+        ws_client.nbe_data.send_frame(eth_frame)
 
 class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
@@ -109,9 +109,8 @@ class BridgedTapDevice(Pollable):
     def recv_ready(self):
         try:
             while self.fd:
-                eth_frame = bytearray(16384)
-                eth_frame_len = os.readv(self.fd, [eth_frame])
-                self.ws_client.send_frame(eth_frame, eth_frame_len)
+                eth_frame = os.read(self.fd, MAX_PAYLOAD_SIZE)
+                self.ws_client.send_frame(eth_frame)
         except BlockingIOError:
             ## no data available to read
             pass
@@ -121,7 +120,6 @@ class BridgedTapDevice(Pollable):
         self.out.clear()
         self.wants_send(False)
 
-    def send_frame(self, eth_frame, eth_frame_len):
-        if eth_frame_len:
-            self.wants_send(True)
-            self.out.append(eth_frame[ : eth_frame_len ])
+    def send_frame(self, eth_frame):
+        self.out.append(eth_frame)
+        self.wants_send(True)
