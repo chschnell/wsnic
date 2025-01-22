@@ -156,7 +156,7 @@ class WsnicServer:
                         terminated = True
                         break
                     else:
-                        pollable.close()
+                        pollable.close('received HANUGP signal')
             if tm_now - last_refresh_tm > 5:
                 for pollable in self.pollables.values():
                     pollable.refresh(tm_now)
@@ -166,7 +166,7 @@ class WsnicServer:
         if self.stunnel:
             self.stunnel.close()
         if self.ws_server:
-            self.ws_server.close()
+            self.ws_server.close('server shutdown')
             self.ws_server = None
         if self.netbe:
             self.netbe.close()

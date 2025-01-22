@@ -99,7 +99,7 @@ class BridgedTapDevice(Pollable):
         Exec(logger, check=True)(f'ip link set dev {self.tap_iface} master {self.br_iface} up')
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
-    def close(self):
+    def close(self, reason=None):
         fd = self.fd
         super().close()
         if fd is not None:

@@ -320,16 +320,16 @@ class WebSocketServer(Pollable):
         super().open(self.sock.fileno())
         logger.info(f'{self.addr}: WebSocket server listening')
 
-    def close(self):
+    def close(self, reason='unknown'):
         super().close()
         ws_clients = self.ws_clients
         self.ws_clients = set()
         for ws_client in ws_clients:
-            ws_client.close('server shutdown')
+            ws_client.close(reason)
         if self.sock:
             self.sock.close()
             self.sock = None
-            logger.info(f'WebSocket server closed')
+            logger.info(f'WebSocket server closed, reason: {reason}')
 
     def recv_ready(self):
         sock, addr = self.sock.accept()

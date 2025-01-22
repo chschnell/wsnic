@@ -96,7 +96,7 @@ class Pollable:
         self.fd = fd
         self.server.register_pollable(fd, self, self.epoll_flags)
 
-    def close(self):
+    def close(self, reason=None):
         if self.fd is not None:
             self.server.unregister_pollable(self.fd)
             self.fd = None
