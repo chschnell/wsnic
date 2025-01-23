@@ -9,6 +9,27 @@ from wsnic import Pollable, MAX_PAYLOAD_SIZE
 
 logger = logging.getLogger('websock')
 
+WS_MAGIC_UUID   = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+WS_FIN_BIT      = 0x80
+WS_MASKED_BIT   = 0x80
+WS_OP_CODE_BITS = 0x0F
+WS_PAYLOAD_BITS = 0x7F
+
+OP_CODE_CONTINUATION = 0x0
+OP_CODE_TXT_MSG      = 0x1
+OP_CODE_BIN_MSG      = 0x2
+OP_CODE_CLOSE        = 0x8
+OP_CODE_PING         = 0x9
+OP_CODE_PONG         = 0xA
+
+MSG_PARSE_START   = 0
+MSG_PARSE_LEN7    = 1
+MSG_PARSE_LEN16   = 2
+MSG_PARSE_LEN64   = 3
+MSG_PARSE_MASK    = 4
+MSG_PARSE_PAYLOAD = 5
+MSG_PARSE_DONE    = 6
+
 class WsHandshakeDecoder:
     def __init__(self, ws_client):
         self.ws_client = ws_client
@@ -74,27 +95,6 @@ class WsHandshakeDecoder:
         else:
             return None
 
-WS_MAGIC_UUID   = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
-WS_FIN_BIT      = 0x80
-WS_MASKED_BIT   = 0x80
-WS_OP_CODE_BITS = 0x0F
-WS_PAYLOAD_BITS = 0x7F
-
-OP_CODE_CONTINUATION = 0x0
-OP_CODE_TXT_MSG      = 0x1
-OP_CODE_BIN_MSG      = 0x2
-OP_CODE_CLOSE        = 0x8
-OP_CODE_PING         = 0x9
-OP_CODE_PONG         = 0xA
-
-MSG_PARSE_START   = 0
-MSG_PARSE_LEN7    = 1
-MSG_PARSE_LEN16   = 2
-MSG_PARSE_LEN64   = 3
-MSG_PARSE_MASK    = 4
-MSG_PARSE_PAYLOAD = 5
-MSG_PARSE_DONE    = 6
-
 class WsMessageDecoder:
     def __init__(self, ws_client):
         self.ws_client = ws_client         ## parent WebSocketClient
@@ -116,10 +116,6 @@ class WsMessageDecoder:
             if self.parse_state == MSG_PARSE_PAYLOAD:
                 data_ofs = self._parse_payload(data, data_ofs, data_len)
             if self.parse_state == MSG_PARSE_DONE:
-                """
-                if self.payload_masked and self.payload_buf:
-                    self._unmask_payload()
-                """
                 self.ws_client.handle_ws_message(self.op_code, self.payload_buf)
                 self.payload_buf = None
                 self._set_parse_state(MSG_PARSE_START)
@@ -181,16 +177,15 @@ class WsMessageDecoder:
 
     def _parse_payload(self, data, data_ofs, data_len):
         n_consumed = min(self.payload_len - self.payload_cursor, data_len - data_ofs)
-        if self.payload_buf is not None:
-            """
-            self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
-            """
+        if self.payload_buf:
             if self.payload_masked:
                 payload_buf = self.payload_buf
                 payload_mask = self.payload_mask
                 payload_cursor = self.payload_cursor
-                for data_cursor in range(data_ofs, data_ofs + n_consumed):
-                    payload_buf[payload_cursor] = data[data_cursor] ^ payload_mask[payload_cursor % 4]
+                mask_cursor = payload_cursor % 4
+                for data_byte in data[data_ofs : data_ofs + n_consumed]:
+                    payload_buf[payload_cursor] = data_byte ^ payload_mask[mask_cursor]
+                    mask_cursor = (mask_cursor + 1) & 3
                     payload_cursor += 1
             else:
                 self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
@@ -198,21 +193,6 @@ class WsMessageDecoder:
         if self.payload_cursor == self.payload_len:
             self._set_parse_state(MSG_PARSE_DONE)
         return data_ofs + n_consumed
-
-    def _unmask_payload(self):
-        payload_buf = self.payload_buf
-        payload_len = self.payload_len
-        payload_mask = self.payload_mask
-        # naive:
-        # for i in range(payload_len):
-        #    payload_buf[i] ^= payload_mask[i % 4]
-        payload_len32 = (payload_len >> 2) << 2
-        payload_view32 = memoryview(payload_buf)[ : payload_len32].cast('I')
-        payload_mask32 = struct.unpack_from('I', payload_mask)[0]
-        for i32 in range(payload_len32 >> 2):
-            payload_view32[i32] ^= payload_mask32
-        for i in range(payload_len - payload_len32):
-            payload_buf[payload_len32 + i] ^= payload_mask[i]
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
