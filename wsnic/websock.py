@@ -182,10 +182,8 @@ class WsMessageDecoder:
                 payload_buf = self.payload_buf
                 payload_mask = self.payload_mask
                 payload_cursor = self.payload_cursor
-                mask_cursor = payload_cursor % 4
                 for data_byte in data[data_ofs : data_ofs + n_consumed]:
-                    payload_buf[payload_cursor] = data_byte ^ payload_mask[mask_cursor]
-                    mask_cursor = (mask_cursor + 1) & 3
+                    payload_buf[payload_cursor] = data_byte ^ payload_mask[payload_cursor & 3]
                     payload_cursor += 1
             else:
                 self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
@@ -251,8 +249,10 @@ class WebSocketClient(Pollable):
             self._send_ws_message(OP_CODE_PONG, payload_buf)
         elif op_code == OP_CODE_PONG:
             logger.debug(f'{self.addr}: received PONG from WebSocket client')
-        else:
+        elif payload_buf:
             logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
+        else:
+            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
 
     def _send_ws_message(self, op_code, payload_buf):
         payload_len = len(payload_buf) if payload_buf else 0
