@@ -6,10 +6,12 @@
 import logging, collections, socket, time, struct, base64, hashlib
 
 from wsnic import Pollable, MAX_PAYLOAD_SIZE
+#from wsnic.libwsnic import CWsMessageDecoder
 
 logger = logging.getLogger('websock')
 
-WS_MAGIC_UUID   = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+WS_MAGIC_UUID = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+
 WS_FIN_BIT      = 0x80
 WS_MASKED_BIT   = 0x80
 WS_OP_CODE_BITS = 0x0F
@@ -22,13 +24,13 @@ OP_CODE_CLOSE        = 0x8
 OP_CODE_PING         = 0x9
 OP_CODE_PONG         = 0xA
 
-MSG_PARSE_START   = 0
-MSG_PARSE_LEN7    = 1
-MSG_PARSE_LEN16   = 2
-MSG_PARSE_LEN64   = 3
-MSG_PARSE_MASK    = 4
-MSG_PARSE_PAYLOAD = 5
-MSG_PARSE_DONE    = 6
+MSG_DECODE_START   = 0
+MSG_DECODE_LEN7    = 1
+MSG_DECODE_LEN16   = 2
+MSG_DECODE_LEN64   = 3
+MSG_DECODE_MASK    = 4
+MSG_DECODE_PAYLOAD = 5
+MSG_DECODE_DONE    = 255
 
 class WsHandshakeDecoder:
     def __init__(self, ws_client):
@@ -97,114 +99,127 @@ class WsHandshakeDecoder:
 
 class WsMessageDecoder:
     def __init__(self, ws_client):
-        self.ws_client = ws_client         ## parent WebSocketClient
-        self.op_code = None                ## int, one of OP_CODE_*
-        self.fin_flag = False              ## bool, True: current message has FIN flag set (TODO)
-        self.payload_len = 0               ## int, payload length of current message
-        self.payload_masked = False        ## bool, True: payload is XOR masked with payload_mask
-        self.payload_mask = bytearray(4)   ## 32 bit XOR mask
-        self.payload_buf = None            ## bytearray[payload_len], current payload buffer
-        self.payload_cursor = None         ## int, cursor into payload_buf[]
-        self.parse_state = MSG_PARSE_START ## int, one of MSG_PARSE_*
-        self.parse_substate = None         ## int, sub-state depending on parse_state
+        self.ws_client = ws_client           ## parent WebSocketClient
+        self.buffer_pool = ws_client.buffer_pool ## BufferPool, shared pool of buffers
+        self.op_code = None                  ## int, one of OP_CODE_*
+        self.fin_flag = False                ## bool, True: current message has FIN flag set (TODO)
+        self.payload_len = 0                 ## int, payload length of current message
+        self.payload_masked = False          ## bool, True: payload is XOR masked with payload_mask
+        self.payload_mask = bytearray(4)     ## 32 bit XOR mask
+        self.payload_buf = None              ## bytearray[payload_len], current payload buffer
+        self.payload_cursor = None           ## int, cursor into payload_buf[]
+        self.decode_state = MSG_DECODE_START ## int, one of MSG_DECODE_*
+        self.decode_substate = None          ## int, sub-state depending on decode_state
 
     def decode(self, data, data_len):
         data_ofs = 0
         while data_ofs < data_len:
-            if self.parse_state < MSG_PARSE_PAYLOAD:
-                data_ofs = self._parse_header(data, data_ofs, data_len)
-            if self.parse_state == MSG_PARSE_PAYLOAD:
-                data_ofs = self._parse_payload(data, data_ofs, data_len)
-            if self.parse_state == MSG_PARSE_DONE:
+            if self.decode_state < MSG_DECODE_PAYLOAD:
+                data_ofs = self._decode_header(data, data_ofs, data_len)
+            if self.decode_state == MSG_DECODE_PAYLOAD:
+                data_ofs = self._decode_payload(data, data_ofs, data_len)
+            if self.decode_state == MSG_DECODE_DONE:
                 self.ws_client.handle_ws_message(self.op_code, self.payload_buf)
                 self.payload_buf = None
-                self._set_parse_state(MSG_PARSE_START)
+                self._set_decode_state(MSG_DECODE_START)
 
-    def _set_parse_state(self, new_parse_state):
-        if new_parse_state == MSG_PARSE_MASK and not self.payload_masked:
-            ## skip mask bytes if MASKED flag is not set
-            new_parse_state = MSG_PARSE_PAYLOAD
-        if new_parse_state == MSG_PARSE_PAYLOAD:
+    def _set_decode_state(self, new_decode_state):
+        if new_decode_state == self.decode_state:
+            raise Exception(f'already in decode state {new_decode_state}!')
+        if new_decode_state == MSG_DECODE_MASK and not self.payload_masked:
+            ## no mask bytes if MASKED flag is not set
+            new_decode_state = MSG_DECODE_PAYLOAD
+        if new_decode_state == MSG_DECODE_PAYLOAD:
             self.payload_cursor = 0
             if self.payload_len:
                 if self.payload_len <= MAX_PAYLOAD_SIZE:
                     ## accept payload
-                    self.payload_buf = bytearray(self.payload_len)
+                    self.payload_buf = memoryview(self.buffer_pool.get_buffer())[ : self.payload_len ]
                 else:
                     ## drop oversized payload
                     self.payload_buf = None
             else:
-                ## skip empty payload
-                new_parse_state = MSG_PARSE_DONE
-        self.parse_state = new_parse_state
-        self.parse_substate = 0
+                ## empty payload
+                new_decode_state = MSG_DECODE_DONE
+        self.decode_state = new_decode_state
+        self.decode_substate = 0
 
-    def _parse_header(self, data, data_ofs, data_len):
-        while data_ofs < data_len and self.parse_state < MSG_PARSE_PAYLOAD:
+    def _decode_header(self, data, data_ofs, data_len):
+        while data_ofs < data_len and self.decode_state < MSG_DECODE_PAYLOAD:
             data_byte = data[data_ofs]
             data_ofs += 1
-            if self.parse_state == MSG_PARSE_START:
+            if self.decode_state == MSG_DECODE_START:
                 self.op_code = data_byte & WS_OP_CODE_BITS
                 self.fin_flag = bool(data_byte & WS_FIN_BIT)
-                self._set_parse_state(MSG_PARSE_LEN7)
-            elif self.parse_state == MSG_PARSE_LEN7:
+                self._set_decode_state(MSG_DECODE_LEN7)
+            elif self.decode_state == MSG_DECODE_LEN7:
                 self.payload_masked = bool(data_byte & WS_MASKED_BIT)
                 self.payload_len = 0
                 payload_len = data_byte & WS_PAYLOAD_BITS   ## payload_len: 0 ... 127
                 if payload_len == 0:
-                    self._set_parse_state(MSG_PARSE_DONE)
+                    self._set_decode_state(MSG_DECODE_DONE)
                 elif payload_len < 126:
                     self.payload_len = payload_len
-                    self._set_parse_state(MSG_PARSE_MASK)
+                    self._set_decode_state(MSG_DECODE_MASK)
                 elif payload_len == 126:
-                    self._set_parse_state(MSG_PARSE_LEN16)
+                    self._set_decode_state(MSG_DECODE_LEN16)
                 else:
-                    self._set_parse_state(MSG_PARSE_LEN64)
-            elif self.parse_state == MSG_PARSE_LEN16 or self.parse_state == MSG_PARSE_LEN64:
+                    self._set_decode_state(MSG_DECODE_LEN64)
+            elif self.decode_state == MSG_DECODE_LEN16:
                 self.payload_len = self.payload_len << 8 | data_byte
-                self.parse_substate += 1
-                if (self.parse_state == MSG_PARSE_LEN16 and self.parse_substate == 2) or \
-                        (self.parse_state == MSG_PARSE_LEN64 and self.parse_substate == 8):
-                    self._set_parse_state(MSG_PARSE_MASK)
-            elif self.parse_state == MSG_PARSE_MASK:
-                self.payload_mask[self.parse_substate] = data_byte
-                self.parse_substate += 1
-                if self.parse_substate == 4:
-                    self._set_parse_state(MSG_PARSE_PAYLOAD)
+                self.decode_substate += 1
+                if self.decode_substate == 2:
+                    self._set_decode_state(MSG_DECODE_MASK)
+            elif self.decode_state == MSG_DECODE_LEN64:
+                self.payload_len = self.payload_len << 8 | data_byte
+                self.decode_substate += 1
+                if self.decode_substate == 8:
+                    self._set_decode_state(MSG_DECODE_MASK)
+            elif self.decode_state == MSG_DECODE_MASK:
+                self.payload_mask[self.decode_substate] = data_byte
+                self.decode_substate += 1
+                if self.decode_substate == 4:
+                    self._set_decode_state(MSG_DECODE_PAYLOAD)
             else:
-                raise Exception(f'unexpected parse_state {self.parse_state} in WebSocket parser')
+                raise Exception(f'unexpected decode_state {self.decode_state} in WebSocket decoder')
         return data_ofs
 
-    def _parse_payload(self, data, data_ofs, data_len):
+    def _decode_payload(self, data, data_ofs, data_len):
         n_consumed = min(self.payload_len - self.payload_cursor, data_len - data_ofs)
         if self.payload_buf:
+            payload_buf = self.payload_buf
+            payload_cursor = self.payload_cursor
             if self.payload_masked:
-                payload_buf = self.payload_buf
                 payload_mask = self.payload_mask
-                payload_cursor = self.payload_cursor
-                for data_byte in data[data_ofs : data_ofs + n_consumed]:
-                    payload_buf[payload_cursor] = data_byte ^ payload_mask[payload_cursor & 3]
+                for data_cursor in range(data_ofs, data_ofs + n_consumed):
+                    payload_buf[payload_cursor] = data[data_cursor] ^ payload_mask[payload_cursor & 3]
                     payload_cursor += 1
             else:
-                self.payload_buf[self.payload_cursor : self.payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
+                payload_buf[payload_cursor : payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
         self.payload_cursor += n_consumed
         if self.payload_cursor == self.payload_len:
-            self._set_parse_state(MSG_PARSE_DONE)
+            self._set_decode_state(MSG_DECODE_DONE)
         return data_ofs + n_consumed
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
         super().__init__(ws_server.server)
-        self.ws_server = ws_server              ## WebSocketServer, the server that created this instance
-        self.sock_recv_buf = bytearray(65536)   ## fixed buffer for socket.recv_into()
-        self.decoder = WsHandshakeDecoder(self) ## either WsHandshakeDecoder or WsMessageDecoder
-        self.sock = None                        ## socket, TCP client socket accepted by WebSocketServer
-        self.addr = None                        ## string, remote client address "IP:PORT"
-        self.nbe_data = None                    ## opaque pointer reserved for NetworkBackend
-        self.out = collections.deque()          ## data chunks queued for sending to self.sock
-        self.last_recv_tm = time.time()         ## int, most recent time any data was received from self.sock
-        self.last_ping_tm = self.last_recv_tm   ## int, most recent time a PING was sent to self.sock
-        self.closing = False                    ## bool, close connection as soon as self.out is drained
+        self.ws_server = ws_server                 ## WebSocketServer, the server that created this instance
+        self.buffer_pool = self.server.buffer_pool ## BufferPool, shared pool of buffers
+        self.sock_recv_buf = bytearray(65536)      ## fixed buffer for socket.recv_into()
+        self.decoder = WsHandshakeDecoder(self)    ## either WsHandshakeDecoder or WsMessageDecoder
+        self.out = collections.deque()             ## bytes, bytearray or memoryview queued for sending to self.sock
+        self.closing = False                       ## bool, close connection as soon as self.out is drained
+        self.last_recv_tm = time.time()            ## int, most recent time any data was received from self.sock
+        self.last_ping_tm = self.last_recv_tm      ## int, most recent time a PING was sent to self.sock
+        self.sock = None                           ## socket, TCP client socket accepted by WebSocketServer
+        self.addr = None                           ## string, remote client address "IP:PORT"
+        self.nbe_data = None                       ## opaque pointer reserved for NetworkBackend
+
+    def _clear_out(self):
+        if self.out:
+            self.buffer_pool.put_buffers(self.out)
+            self.out.clear()
 
     def open(self, sock, addr):
         self.sock = sock
@@ -216,6 +231,7 @@ class WebSocketClient(Pollable):
         self.netbe.detach_ws_client(self)
         self.ws_server.remove_client(self)
         if self.sock is not None:
+            self._clear_out()
             self.sock.close()
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
@@ -232,6 +248,7 @@ class WebSocketClient(Pollable):
         self.wants_send(True)
         ## accept WebSocket connection
         self.decoder = WsMessageDecoder(self)
+        #self.decoder = CWsMessageDecoder(self)
         self.netbe.attach_ws_client(self)
         logger.info(f'{self.addr}: accepted WebSocket client connection')
 
@@ -242,7 +259,7 @@ class WebSocketClient(Pollable):
                 self.netbe.forward_from_ws_client(self, payload_buf)
         elif op_code == OP_CODE_CLOSE:
             logger.debug(f'{self.addr}: received CLOSE from WebSocket client, replying with CLOSE before closing')
-            self._send_ws_message(OP_CODE_CLOSE, None)
+            self._send_ws_message(OP_CODE_CLOSE, payload_buf)
             self.closing = True
         elif op_code == OP_CODE_PING:
             logger.debug(f'{self.addr}: received PING from WebSocket client, replying with PONG')
@@ -250,16 +267,18 @@ class WebSocketClient(Pollable):
         elif op_code == OP_CODE_PONG:
             logger.debug(f'{self.addr}: received PONG from WebSocket client')
         elif payload_buf:
-            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
+            logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
         else:
-            logger.info(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
+            logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
 
     def _send_ws_message(self, op_code, payload_buf):
         payload_len = len(payload_buf) if payload_buf else 0
         if payload_len < 126:
             self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
-        else:
+        elif payload_len < 65536:
             self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
+        else:
+            self.out.append(struct.pack(f'!BBQ', op_code | WS_FIN_BIT, 127, payload_len))
         if payload_len:
             self.out.append(payload_buf)
         self.wants_send(True)
@@ -271,27 +290,32 @@ class WebSocketClient(Pollable):
     def send_ready(self):
         if self.sock is None:
             return
-        try:
-            self.sock.sendmsg(self.out)
-            self.out.clear()
-        except OSError as e:
-            self.close(f'error in socket.sendmsg(): {e}')
-        else:
-            self.wants_send(False)
-            if self.closing:
-                self.close('closed by client')
+        if self.out:
+            try:
+                self.sock.sendmsg(self.out)
+            except OSError as e:
+                self.close(f'error in socket.sendmsg(): {e}')
+            self._clear_out()
+        self.wants_send(False)
+        if self.closing:
+            self.close('closed by client')
 
     def recv_ready(self):
         recv_buf = self.sock_recv_buf
         try:
             while self.sock:
                 recv_len = self.sock.recv_into(recv_buf)
-                if recv_len <= 0:
+                if recv_len > 0:
+                    self.decoder.decode(recv_buf, recv_len)
+                    self.last_recv_tm = time.time()
+                else:
+                    if recv_len == 0:
+                        self.close(f'received EOF in sock.recv_into()')
+                    else:
+                        self.close(f'sock.recv_into() returned unexpected result {recv_len}')
                     break
-                self.decoder.decode(recv_buf, recv_len)
-                self.last_recv_tm = time.time()
         except BlockingIOError:
-            ## no data available to read
+            ## no data available to read from self.sock
             pass
         except OSError as e:
             self.close(f'error in socket.recv_into(): {e}')
@@ -307,16 +331,16 @@ class WebSocketServer(Pollable):
         super().__init__(server)
         self.addr = f'{self.config.ws_address}:{self.config.ws_port}'
         self.ws_clients = set()
-        self.sock = None
+        self.srv_sock = None
 
     def open(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((self.config.ws_address, self.config.ws_port))
-        self.sock.setblocking(0)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.sock.listen(1)
-        super().open(self.sock.fileno())
+        self.srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.srv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.srv_sock.bind((self.config.ws_address, self.config.ws_port))
+        self.srv_sock.setblocking(0)
+        self.srv_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.srv_sock.listen(1)
+        super().open(self.srv_sock.fileno())
         logger.info(f'{self.addr}: WebSocket server listening')
 
     def close(self, reason='unknown'):
@@ -325,13 +349,13 @@ class WebSocketServer(Pollable):
         self.ws_clients = set()
         for ws_client in ws_clients:
             ws_client.close(reason)
-        if self.sock:
-            self.sock.close()
-            self.sock = None
+        if self.srv_sock:
+            self.srv_sock.close()
+            self.srv_sock = None
             logger.info(f'WebSocket server closed, reason: {reason}')
 
     def recv_ready(self):
-        sock, addr = self.sock.accept()
+        sock, addr = self.srv_sock.accept()
         sock.setblocking(0)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         ws_client = WebSocketClient(self)

@@ -3,7 +3,7 @@
 ## Shared package classes.
 ##
 
-import os, logging, random, subprocess, struct
+import os, logging, random, subprocess, struct, collections
 
 from select import EPOLLIN, EPOLLOUT
 
@@ -85,6 +85,40 @@ class Exec:
         if self.logger.isEnabledFor(logging.DEBUG):
             self.logger.debug(f'$ {" ".join(cmdline)}')
         subprocess.run(cmdline, check=self.check if check is None else check)
+
+class BufferPool:
+    def __init__(self, n_preallocate=32):
+        self.idle_pool = collections.deque([bytearray(MAX_PAYLOAD_SIZE) for i in range(n_preallocate)])
+        self.n_allocated = n_preallocate
+
+    def get_buffer(self):
+        try:
+            return self.idle_pool.pop()
+        except IndexError:
+            self.n_allocated += 1
+            return bytearray(MAX_PAYLOAD_SIZE)
+
+    def put_buffer(self, buffer):
+        if isinstance(buffer, memoryview):
+            view = buffer
+            buffer = view.obj
+        else:
+            view = None
+        if isinstance(buffer, bytearray) and len(buffer) == MAX_PAYLOAD_SIZE:
+            if view:
+                view.release()
+            self.idle_pool.appendleft(buffer)
+
+    def put_buffers(self, buffers):
+        for buffer in buffers:
+            self.put_buffer(buffer)
+
+    def log_statistics(self, logger):
+        n_idle = len(self.idle_pool)
+        if self.n_allocated == n_idle:
+            logger.info(f'buffer pool size peaked at {self.n_allocated} buffers')
+        else:
+            logger.info(f'buffer pool size peaked at {self.n_allocated} buffers ({n_idle} accounted for)')
 
 class Pollable:
     ## Base class that wraps an open file descriptor fd for epoll()

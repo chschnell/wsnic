@@ -5,6 +5,7 @@
 
 import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil, subprocess
 
+from wsnic import BufferPool
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
@@ -108,6 +109,7 @@ class WsnicServer:
         self.netbe = None               ## NetworkBackend, instance of netbe_class created in run()
         self.ws_server = None           ## WebSocketServer, created in run()
         self.stunnel = None             ## StunnelProxyServer, created in run()
+        self.buffer_pool = BufferPool() ## BufferPool, shared pool of buffers
         self.epoll = select.epoll()     ## single epoll object for all open sockets and files
         self.pollables = {}             ## dict(int fd => Pollable pollable)
 
@@ -172,6 +174,7 @@ class WsnicServer:
             self.netbe.close()
             self.netbe = None
         self.epoll.close()
+        self.buffer_pool.log_statistics(logger)
 
 def main():
     def format_help(text):
