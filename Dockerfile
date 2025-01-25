@@ -23,6 +23,7 @@ RUN apt-get update && \
 
 # Copy Python source code into the container.
 COPY wsnic/*.py ./wsnic/
+COPY lib/ ./lib/
 COPY README.md LICENSE .
 
 # Expose the ports that the application listens on.
