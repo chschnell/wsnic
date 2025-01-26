@@ -100,6 +100,8 @@ class BufferPool:
             return bytearray(MAX_PAYLOAD_SIZE)
 
     def put_buffer(self, buffer):
+        if not buffer:
+            return
         if isinstance(buffer, memoryview):
             view = buffer
             buffer = view.obj
@@ -170,11 +172,6 @@ class Pollable:
     def send_frame(self, eth_frame):
         ## send eth_frame to underlying device
         ## only implemented by WebSocketClient and BridgedTapDevice
-        pass
-
-    def refresh(self, tm_now):
-        ## called in periodic intervals for housekeeping purposes
-        ## only implemented by WebSocketClient
         pass
 
 class NetworkBackend:

@@ -160,8 +160,7 @@ class WsnicServer:
                     else:
                         pollable.close('received HANUGP signal')
             if tm_now - last_refresh_tm > 5:
-                for pollable in self.pollables.values():
-                    pollable.refresh(tm_now)
+                self.ws_server.refresh(tm_now)
                 last_refresh_tm = tm_now
 
     def shutdown(self):

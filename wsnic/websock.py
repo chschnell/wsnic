@@ -264,28 +264,33 @@ class WebSocketClient(Pollable):
         elif op_code == OP_CODE_PING:
             logger.debug(f'{self.addr}: received PING from WebSocket client, replying with PONG')
             self._send_ws_message(OP_CODE_PONG, payload_buf)
-        elif op_code == OP_CODE_PONG:
-            logger.debug(f'{self.addr}: received PONG from WebSocket client')
-        elif payload_buf:
-            logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
         else:
-            logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
+            if payload_buf is not None:
+                self.buffer_pool.put_buffer(payload_buf)
+            if op_code == OP_CODE_PONG:
+                logger.debug(f'{self.addr}: received PONG from WebSocket client')
+            elif payload_buf:
+                logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len={len(payload_buf)}')
+            else:
+                logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
 
     def _send_ws_message(self, op_code, payload_buf):
-        payload_len = len(payload_buf) if payload_buf else 0
-        if payload_len < 126:
-            self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
-        elif payload_len < 65536:
-            self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
+        if self.sock is not None:
+            payload_len = len(payload_buf) if payload_buf else 0
+            if payload_len < 126:
+                self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
+            elif payload_len < 65536:
+                self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
+            else:
+                self.out.append(struct.pack(f'!BBQ', op_code | WS_FIN_BIT, 127, payload_len))
+            if payload_len:
+                self.out.append(payload_buf)
+            self.wants_send(True)
         else:
-            self.out.append(struct.pack(f'!BBQ', op_code | WS_FIN_BIT, 127, payload_len))
-        if payload_len:
-            self.out.append(payload_buf)
-        self.wants_send(True)
+            self.buffer_pool.put_buffer(payload_buf)
 
     def send_frame(self, eth_frame):
-        if self.sock is not None:
-            self._send_ws_message(OP_CODE_BIN_MSG, eth_frame)
+        self._send_ws_message(OP_CODE_BIN_MSG, eth_frame)
 
     def send_ready(self):
         if self.sock is None:
@@ -293,9 +298,9 @@ class WebSocketClient(Pollable):
         if self.out:
             try:
                 self.sock.sendmsg(self.out)
+                self._clear_out()
             except OSError as e:
                 self.close(f'error in socket.sendmsg(): {e}')
-            self._clear_out()
         self.wants_send(False)
         if self.closing:
             self.close('closed by client')
@@ -365,3 +370,7 @@ class WebSocketServer(Pollable):
 
     def remove_client(self, ws_client):
         self.ws_clients.discard(ws_client)
+
+    def refresh(self, tm_now):
+        for ws_client in self.ws_clients:
+            ws_client.refresh(tm_now)
