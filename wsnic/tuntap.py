@@ -46,7 +46,8 @@ def open_tap(tap_ifname, tap_clone_dev=None):
     ## Use os.read(fd) and os.write(fd) to exchange ethernet frames with the
     ## TAP device.
     ##
-    tap_fd = os.open(tap_clone_dev if tap_clone_dev else TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
+    # open(devname, "r+b", buffering=0)
+    tap_fd = os.open(tap_clone_dev if tap_clone_dev else TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK | os.O_NDELAY)
     try:
         os.set_blocking(tap_fd, False)
         ifreq = struct.pack('16sH', tap_ifname.encode(), IFF_TAP | IFF_NO_PI)
@@ -64,7 +65,9 @@ def open_tap_socket(tap_ifname):
     ## - str tap_ifname
     ##     The ifname of an existing TAP device.
     ##
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    sock.setblocking(0)
     try:
         ## bind socket to TAP device tap_ifname
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, tap_ifname.encode())
