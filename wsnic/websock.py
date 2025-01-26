@@ -275,18 +275,18 @@ class WebSocketClient(Pollable):
 
     def _send_ws_message(self, op_code, payload_buf):
         if self.sock is not None:
-            payload_len = len(payload_buf) if payload_buf else 0
+            payload_len = len(payload_buf) if payload_buf and len(payload_buf) else 0
             if payload_len < 126:
                 self.out.append(struct.pack(f'!BB', op_code | WS_FIN_BIT, payload_len))
             elif payload_len < 65536:
                 self.out.append(struct.pack(f'!BBH', op_code | WS_FIN_BIT, 126, payload_len))
             else:
                 self.out.append(struct.pack(f'!BBQ', op_code | WS_FIN_BIT, 127, payload_len))
-            if payload_buf:
+            if payload_len:
                 self.out.append(payload_buf)
+                payload_buf = None
             self.wants_send(True)
-        else:
-            self.buffer_pool.put_buffer(payload_buf)
+        self.buffer_pool.put_buffer(payload_buf)
 
     def send_frame(self, eth_frame):
         self._send_ws_message(OP_CODE_BIN_MSG, eth_frame)
