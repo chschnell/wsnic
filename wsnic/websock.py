@@ -54,9 +54,6 @@ class WsHandshakeDecoder:
     def cleanup(self):
         pass
 
-    def cleanup(self):
-        pass
-
     def _parse_handshake_request(self, data, data_len):
         hs_upgrade_websocket = False    ## True if header "Upgrade: websocket\r\n" exists
         handshake_key = None            ## bytes value of header "Sec-WebSocket-Key"
@@ -256,11 +253,11 @@ class WebSocketClient(Pollable):
             b'', b'' ]))
         self.wants_send(True)
         ## accept WebSocket connection
-        self.decoder = WsMessageDecoder(self)
-        #self.decoder = CWsMessageDecoder(self)
         self.netbe.attach_ws_client(self)
         logger.info(f'{self.addr}: accepted WebSocket client connection')
-        ## begin decoding WebSocket messages with possible tail fragment from HTTP decoder "ws_bytes"
+        ## begin decoding WebSocket messages with possible tail fragment from HTTP decoder in "ws_bytes"
+        self.decoder = WsMessageDecoder(self)
+        #self.decoder = CWsMessageDecoder(self)
         self.decoder.decode(ws_bytes, len(ws_bytes))
 
     def handle_ws_message(self, op_code, payload_buf):
