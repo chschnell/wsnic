@@ -88,8 +88,9 @@ class BridgedTapDevice(Pollable):
         super().__init__(server)
         self.ws_client = ws_client            ## WebSocketClient, the ws_client associated to this TAP device
         self.buffer_pool = server.buffer_pool ## BufferPool, shared pool of buffers
-        self.out = collections.deque()        ## data chunks queued for sending to the TAP device self.fd
+        self.out = collections.deque()        ## data chunks queued for sending to the TAP device
         self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsbr0'
+        self.tap_fd = None                    ## int, TAP device file descriptor
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def _clear_out(self):
@@ -99,28 +100,28 @@ class BridgedTapDevice(Pollable):
 
     def open(self):
         ## create and open ws_client's TAP device
-        self.fd, self.tap_iface = open_tap('wstap%d')
-        super().open(self.fd)
+        self.tap_fd, self.tap_iface = open_tap('wstap%d')
+        super().open(self.tap_fd)
         ## attach TAP device to bridge and bring it up
         Exec(logger, check=True)(f'ip link set dev {self.tap_iface} master {self.br_iface} up')
         logger.info(f'created bridged TAP device {self.tap_iface}')
 
     def close(self, reason=None):
-        fd = self.fd
         super().close()
-        if fd is not None:
+        if self.tap_fd is not None:
             self._clear_out()
-            os.close(fd)
+            os.close(self.tap_fd)
+            self.tap_fd = None
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
     def recv_ready(self):
         eth_frame = None
         readv_buffers = [None]
         try:
-            while self.fd:
+            while self.tap_fd:
                 eth_frame = self.buffer_pool.get_buffer()
                 readv_buffers[0] = eth_frame
-                eth_frame_len = os.readv(self.fd, readv_buffers)
+                eth_frame_len = os.readv(self.tap_fd, readv_buffers)
                 if eth_frame_len > 0:
                     self.ws_client.send_frame(memoryview(eth_frame)[ : eth_frame_len ])
                     eth_frame = None
@@ -128,7 +129,7 @@ class BridgedTapDevice(Pollable):
                     logger.warning(f'{self.tap_iface}: os.readv() returned unexpected result {eth_frame_len}')
                     break
         except BlockingIOError:
-            ## no data available to read from self.fd
+            ## no data available to read from TAP device
             pass
         finally:
             if eth_frame:
@@ -136,7 +137,7 @@ class BridgedTapDevice(Pollable):
 
     def send_ready(self):
         if self.out:
-            os.writev(self.fd, self.out)
+            os.writev(self.tap_fd, self.out)
             self._clear_out()
         self.wants_send(False)
 
