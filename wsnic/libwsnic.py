@@ -79,3 +79,8 @@ class CWsMessageDecoder:
                     payload_buf = None
                 self.payload_buf = None
                 self.ws_client.handle_ws_message(self.state.op_code, payload_buf)
+
+    def cleanup(self):
+        if self.payload_buf:
+            self.buffer_pool.put_buffer(self.payload_buf)
+            self.payload_buf = None
