@@ -95,8 +95,9 @@ class BufferPool:
         try:
             return self.idle_pool.pop()
         except IndexError:
-            self.idle_pool.extend([bytearray(MAX_PAYLOAD_SIZE) for i in range(15)])
-            self.n_allocated += 16
+            n_extend = min(self.n_allocated >> 1, 64)
+            self.idle_pool.extend([bytearray(MAX_PAYLOAD_SIZE) for i in range(n_extend - 1)])
+            self.n_allocated += n_extend
             return bytearray(MAX_PAYLOAD_SIZE)
 
     def put_buffer(self, buffer):
