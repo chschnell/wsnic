@@ -54,6 +54,9 @@ class WsHandshakeDecoder:
             sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
             self.ws_client.handle_ws_handshake(sec_websocket_accept)
 
+    def cleanup(self):
+        pass
+
     def _parse_handshake_request(self, data, data_len):
         hs_upgrade_websocket = False    ## True if header "Upgrade: websocket\r\n" exists
         handshake_key = None            ## bytes value of header "Sec-WebSocket-Key"
@@ -122,6 +125,11 @@ class WsMessageDecoder:
                 self.ws_client.handle_ws_message(self.op_code, self.payload_buf)
                 self.payload_buf = None
                 self._set_decode_state(MSG_DECODE_START)
+
+    def cleanup(self):
+        if self.payload_buf:
+            self.buffer_pool.put_buffer(self.payload_buf)
+            self.payload_buf = None
 
     def _set_decode_state(self, new_decode_state):
         if new_decode_state == self.decode_state:
@@ -232,6 +240,7 @@ class WebSocketClient(Pollable):
         self.ws_server.remove_client(self)
         if self.sock is not None:
             self._clear_out()
+            self.decoder.cleanup()
             self.sock.close()
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
