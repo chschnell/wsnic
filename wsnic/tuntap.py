@@ -14,7 +14,7 @@
 ## - interfaces.py - more useful ioctl() calls
 ##   https://gist.github.com/firaxis/0e538c8e5f81eaa55748acc5e679a36e
 
-import os, struct, fcntl
+import os, struct, fcntl, socket
 
 TAP_CLONE_DEV = '/dev/net/tun'
 TUNSETIFF     = 0x400454ca
@@ -22,7 +22,7 @@ IFF_TAP       = 0x0002
 IFF_NO_PI     = 0x1000
 
 def open_tap(tap_ifname, tap_clone_dev=None):
-    ## Open or create a TAP device and return the tuple (fd, ifname).
+    ## Open or create a TAP device file and return the tuple (fd, ifname).
     ##
     ## Arguments
     ## - str tap_ifname
@@ -45,7 +45,7 @@ def open_tap(tap_ifname, tap_clone_dev=None):
     ##
     ## Use os.read(fd) and os.write(fd) to exchange ethernet frames with the
     ## TAP device.
-
+    ##
     tap_fd = os.open(tap_clone_dev if tap_clone_dev else TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK)
     try:
         os.set_blocking(tap_fd, False)
@@ -55,4 +55,20 @@ def open_tap(tap_ifname, tap_clone_dev=None):
         return tap_fd, tap_ifname
     except:
         os.close(tap_fd)
+        raise
+
+def open_tap_socket(tap_ifname):
+    ## Open and return a datagram socket on an existing TAP device.
+    ##
+    ## Arguments
+    ## - str tap_ifname
+    ##     The ifname of an existing TAP device.
+    ##
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        ## bind socket to TAP device tap_ifname
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, tap_ifname.encode())
+        return sock
+    except:
+        sock.close()
         raise
