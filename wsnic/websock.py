@@ -38,21 +38,21 @@ class WsHandshakeDecoder:
         self.request_buffer = bytearray()
 
     def decode(self, data, data_len):
-        handshake_key = None
-        header_len = data.find(b'\r\n\r\n', 0, data_len)
-        if header_len < 0:
-            self.request_buffer.extend(data[ : data_len ])
-        elif len(self.request_buffer):
-            self.request_buffer.extend(data[ : data_len ])
-            handshake_key = self._parse_handshake_request(self.request_buffer, len(self.request_buffer))
+        self.request_buffer.extend(data[ : data_len ])
+        header_stop_ofs = self.request_buffer.find(b'\r\n\r\n')
+        if header_stop_ofs < 0:
+            return
+        handshake_key = self._parse_handshake_request(self.request_buffer, header_stop_ofs)
+        if not handshake_key:
             self.request_buffer.clear()
-        else:
-            handshake_key = self._parse_handshake_request(data, header_len)
-        if handshake_key:
-            raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
-            sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
-            sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
-            self.ws_client.handle_ws_handshake(sec_websocket_accept)
+            return
+        raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
+        sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
+        sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
+        self.ws_client.handle_ws_handshake(sec_websocket_accept, memoryview(self.request_buffer)[ header_stop_ofs + 4 : ])
+
+    def cleanup(self):
+        pass
 
     def cleanup(self):
         pass
@@ -245,7 +245,7 @@ class WebSocketClient(Pollable):
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
 
-    def handle_ws_handshake(self, sec_websocket_accept):
+    def handle_ws_handshake(self, sec_websocket_accept, ws_bytes):
         ## called by WsHandshakeDecoder.decode()
         ## send handshake response
         self.out.append(b'\r\n'.join([
@@ -260,6 +260,8 @@ class WebSocketClient(Pollable):
         #self.decoder = CWsMessageDecoder(self)
         self.netbe.attach_ws_client(self)
         logger.info(f'{self.addr}: accepted WebSocket client connection')
+        ## begin decoding WebSocket messages with possible tail fragment from HTTP decoder "ws_bytes"
+        self.decoder.decode(ws_bytes, len(ws_bytes))
 
     def handle_ws_message(self, op_code, payload_buf):
         ## called by WsMessageDecoder.decode()
