@@ -10,7 +10,7 @@ from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
-logger = logging.getLogger('main')
+logger = logging.getLogger('wsnic')
 
 class WsnicConfig:
     def __init__(self, args):
