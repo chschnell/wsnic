@@ -18,25 +18,31 @@ import os, struct, fcntl, socket
 
 TAP_CLONE_DEV = '/dev/net/tun'
 TUNSETIFF     = 0x400454ca
+TUNSETPERSIST = 0x400454cb
 IFF_TAP       = 0x0002
 IFF_NO_PI     = 0x1000
 
-def open_tap(tap_ifname, tap_clone_dev=None):
+ETH_P_ALL = socket.htons(0x0003)
+
+def open_tap(tap_ifname, tap_clone_dev=None, persist=False):
     ## Open or create a TAP device file and return the tuple (fd, ifname).
     ##
-    ## Arguments
-    ## - str tap_ifname
+    ## Arguments:
+    ## str tap_ifname
     ##     Either the ifname of an existing TAP device or the pattern for
     ##     auto-generated TAP device ifames, for example "extap%d" which
     ##     generates extap0, extap1, ..., extapN.
-    ## - str|None tap_clone_dev
+    ##
+    ## str|None tap_clone_dev
     ##     TAP clone device file path, dynamically created (for example by
     ##     macvtap) or '/dev/net/tun' (which is used by default).
+    ## bool persist
+    ##     True: do not automatically delete device file when closing fd
     ##
-    ## Return values
-    ## - int fd
+    ## Return values:
+    ## int fd
     ##     The TAP device's open, non-blocking file descriptor.
-    ## - str ifname
+    ## str ifname
     ##     Either the same as tap_ifname or the created TAP device's ifname.
     ##
     ## Close fd by using os.close(fd) when it is no longer used. If the TAP
@@ -46,32 +52,15 @@ def open_tap(tap_ifname, tap_clone_dev=None):
     ## Use os.read(fd) and os.write(fd) to exchange ethernet frames with the
     ## TAP device.
     ##
-    # open(devname, "r+b", buffering=0)
     tap_fd = os.open(tap_clone_dev if tap_clone_dev else TAP_CLONE_DEV, os.O_RDWR | os.O_NONBLOCK | os.O_NDELAY)
     try:
         os.set_blocking(tap_fd, False)
         ifreq = struct.pack('16sH', tap_ifname.encode(), IFF_TAP | IFF_NO_PI)
         tunsetiff_result = fcntl.ioctl(tap_fd, TUNSETIFF, ifreq)
         tap_ifname = tunsetiff_result[:16].rstrip(b'\0').decode()
+        if persist:
+            fcntl.ioctl(tap_fd, TUNSETPERSIST, 1)
         return tap_fd, tap_ifname
     except:
         os.close(tap_fd)
-        raise
-
-def open_tap_socket(tap_ifname):
-    ## Open and return a datagram socket on an existing TAP device.
-    ##
-    ## Arguments
-    ## - str tap_ifname
-    ##     The ifname of an existing TAP device.
-    ##
-    #sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
-    sock.setblocking(0)
-    try:
-        ## bind socket to TAP device tap_ifname
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, tap_ifname.encode())
-        return sock
-    except:
-        sock.close()
         raise
