@@ -1,5 +1,5 @@
 **wsnic** (or WebSocket-NIC) is a layer-2 proxy server that connects WebSocket clients to a shared virtual Linux bridge.
-If enabled, clients can access external networks (Internet) through wsnic.
+Clients connected to wsnic can communicate with each other like in a physical network, and if enabled can also access external networks and the Internet.
 
 ## Overview
 
@@ -209,7 +209,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
 By default, modern browsers refuse to connect to HTTPS (and WebSocket Secure) servers that present a self-signed certificate. In order to get around that you have to manually grant permission in your browser.
 
 > [!NOTE]
-> These instructions are for Mozilla Firefox. If you want to use Google Chrome, start `chrome` with command line options `--disable-web-security --ignore-certificate-errors --allow-running-insecure-content --user-data-dir=/tmp/chrome-temp`, and replace `/tmp/chrome-temp` with some directory for the session data.
+> These instructions are for Mozilla Firefox. If you want to use **Google Chrome**, start `chrome` with command line options `--disable-web-security --ignore-certificate-errors --allow-running-insecure-content --user-data-dir=/tmp/chrome-temp`, and replace `/tmp/chrome-temp` with some directory for the session data.
 
 Start wsnic and direct your browser to your wsnic server using a HTTPS URL like:
 
