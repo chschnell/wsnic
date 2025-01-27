@@ -108,8 +108,8 @@ class BridgedTapDevice(Pollable):
 
     def close(self, reason=None):
         super().close()
+        self._clear_out()
         if self.tap_fd is not None:
-            self._clear_out()
             os.close(self.tap_fd)
             self.tap_fd = None
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
@@ -142,5 +142,6 @@ class BridgedTapDevice(Pollable):
         self.wants_send(False)
 
     def send_frame(self, eth_frame):
-        self.out.append(eth_frame)
-        self.wants_send(True)
+        if eth_frame:
+            self.out.append(eth_frame)
+            self.wants_send(True)
