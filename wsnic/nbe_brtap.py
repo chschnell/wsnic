@@ -80,23 +80,23 @@ class BridgedTapNetworkBackend(NetworkBackend):
             ws_client.nbe_data.close()
             ws_client.nbe_data = None
 
-    def forward_from_ws_client(self, ws_client, eth_frame):
-        ws_client.nbe_data.send_frame(eth_frame)
+    def forward_from_ws_client(self, ws_client, frame_pbuf):
+        ws_client.nbe_data.send_frame(frame_pbuf)
 
 class BridgedTapDevice(Pollable):
     def __init__(self, server, ws_client):
         super().__init__(server)
         self.ws_client = ws_client            ## WebSocketClient, the ws_client associated to this TAP device
         self.buffer_pool = server.buffer_pool ## BufferPool, shared pool of buffers
-        self.out = collections.deque()        ## data chunks queued for sending to the TAP device
+        self.outq_pbuf = collections.deque()  ## bytes-like objects queued for sending to TAP device, possibly originating from buffer_pool
         self.br_iface = server.netbe.br_iface ## the bridge's interface name, for example 'wsbr0'
         self.tap_fd = None                    ## int, TAP device file descriptor
         self.tap_iface = None                 ## string, TAP device name (for example: wstap0)
 
     def _clear_out(self):
-        if self.out:
-            self.buffer_pool.put_buffers(self.out)
-            self.out.clear()
+        if self.outq_pbuf:
+            self.buffer_pool.put_buffers(self.outq_pbuf)
+            self.outq_pbuf.clear()
 
     def open(self):
         ## create and open ws_client's TAP device
@@ -115,33 +115,33 @@ class BridgedTapDevice(Pollable):
             logger.info(f'destroyed bridged TAP device {self.tap_iface}')
 
     def recv_ready(self):
-        eth_frame = None
+        frame_pbuf = None
         readv_buffers = [None]
         try:
             while self.tap_fd:
-                eth_frame = self.buffer_pool.get_buffer()
-                readv_buffers[0] = eth_frame
-                eth_frame_len = os.readv(self.tap_fd, readv_buffers)
-                if eth_frame_len > 0:
-                    self.ws_client.send_frame(memoryview(eth_frame)[ : eth_frame_len ])
-                    eth_frame = None
+                frame_pbuf = self.buffer_pool.get_buffer()
+                readv_buffers[0] = frame_pbuf
+                frame_pbuf_len = os.readv(self.tap_fd, readv_buffers)
+                if frame_pbuf_len > 0:
+                    self.ws_client.send_frame(memoryview(frame_pbuf)[ : frame_pbuf_len ])
+                    frame_pbuf = None
                 else:
-                    logger.warning(f'{self.tap_iface}: os.readv() returned unexpected result {eth_frame_len}')
+                    logger.warning(f'{self.tap_iface}: os.readv() returned unexpected result {frame_pbuf_len}')
                     break
         except BlockingIOError:
             ## no data available to read from TAP device
             pass
         finally:
-            if eth_frame:
-                self.buffer_pool.put_buffer(eth_frame)
+            if frame_pbuf:
+                self.buffer_pool.put_buffer(frame_pbuf)
 
     def send_ready(self):
-        if self.out:
-            os.writev(self.tap_fd, self.out)
+        if self.outq_pbuf:
+            os.writev(self.tap_fd, self.outq_pbuf)
             self._clear_out()
         self.wants_send(False)
 
-    def send_frame(self, eth_frame):
-        if eth_frame:
-            self.out.append(eth_frame)
+    def send_frame(self, frame_pbuf):
+        if frame_pbuf:
+            self.outq_pbuf.append(frame_pbuf)
             self.wants_send(True)

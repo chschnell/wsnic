@@ -68,11 +68,11 @@ IP_PROTOS = {
     17: 'UDP',
 }
 
-def log_eth_frame(tag, eth_frame, logger):
-    dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', eth_frame)
+def log_eth_frame(tag, frame_buf, logger):
+    dst_mac, src_mac, eth_type, ip_proto = struct.unpack_from('!6s6sH9xB10x', frame_buf)
     eth_type = ETH_TYPES.get(eth_type, hex(eth_type))
     ip_proto = IP_PROTOS.get(ip_proto, ip_proto)
-    logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(eth_frame)}')
+    logger.info(f'{tag} {mac2str(src_mac)}->{mac2str(dst_mac)} eth_type={eth_type} ip_proto={ip_proto} len={len(frame_buf)}')
 
 class Exec:
     def __init__(self, logger, check=False):
@@ -87,42 +87,62 @@ class Exec:
         subprocess.run(cmdline, check=self.check if check is None else check)
 
 class BufferPool:
-    def __init__(self, n_preallocate=32):
-        self.idle_pool = collections.deque([bytearray(MAX_PAYLOAD_SIZE) for i in range(n_preallocate)])
-        self.n_allocated = n_preallocate
+    ## A dynamically growing pool of fixed size bytearray buffers.
+    ##
+    ## Buffers taken from the pool by get_buffer() must be explicitly
+    ## returned to the pool by using one of the put_buffer(s) methods.
+    ##
+    ## As a convention, any scalar variable that might be assigned a buffer
+    ## originating from the pool, or any container that might contain such
+    ## a buffer should have the suffix "_pbuf" appended.
+    ##
+    class pooled_bytearray(bytearray):
+        pass
+
+    def __init__(self, buffer_size=MAX_PAYLOAD_SIZE, preallocate=32, max_extend=64):
+        self.buffer_size = buffer_size
+        self.n_allocated = preallocate
+        self.max_extend = max_extend
+        self.unused_pool = collections.deque([self.pooled_bytearray(self.buffer_size) for i in range(preallocate)])
+        self.n_used_max = 0
+        self.n_used = 0
 
     def get_buffer(self):
+        self.n_used += 1
+        if self.n_used > self.n_used_max:
+            self.n_used_max = self.n_used
         try:
-            return self.idle_pool.pop()
+            return self.unused_pool.pop()
         except IndexError:
-            n_extend = min(self.n_allocated >> 1, 64)
-            self.idle_pool.extend([bytearray(MAX_PAYLOAD_SIZE) for i in range(n_extend - 1)])
+            n_extend = min(self.n_allocated >> 1, self.max_extend)
+            self.unused_pool.extend([self.pooled_bytearray(self.buffer_size) for i in range(n_extend - 1)])
             self.n_allocated += n_extend
-            return bytearray(MAX_PAYLOAD_SIZE)
+            return self.pooled_bytearray(self.buffer_size)
 
-    def put_buffer(self, buffer):
-        if not buffer:
+    def put_buffer(self, byteslike_pbuf):
+        if not byteslike_pbuf:
             return
-        if isinstance(buffer, memoryview):
-            view = buffer
-            buffer = view.obj
+        if isinstance(byteslike_pbuf, memoryview):
+            view = byteslike_pbuf
+            byteslike_pbuf = view.obj
         else:
             view = None
-        if isinstance(buffer, bytearray) and len(buffer) == MAX_PAYLOAD_SIZE:
+        if isinstance(byteslike_pbuf, self.pooled_bytearray):
             if view:
                 view.release()
-            self.idle_pool.appendleft(buffer)
+            self.unused_pool.appendleft(byteslike_pbuf)
+            self.n_used -= 1
 
-    def put_buffers(self, buffers):
-        for buffer in buffers:
-            self.put_buffer(buffer)
+    def put_buffers(self, iter_pbuf):
+        for byteslike_pbuf in iter_pbuf:
+            self.put_buffer(byteslike_pbuf)
 
     def log_statistics(self, logger):
-        n_idle = len(self.idle_pool)
-        if self.n_allocated == n_idle:
-            logger.info(f'buffer pool size peaked at {self.n_allocated} buffers')
+        if self.n_used == 0:
+            logger.info(f'buffer pool usage peaked at {self.n_used_max}/{self.n_allocated} buffers')
         else:
-            logger.info(f'buffer pool size peaked at {self.n_allocated} buffers ({n_idle} accounted for)')
+            logger.info(f'buffer pool usage peaked at {self.n_used_max}/{self.n_allocated} buffers '
+                f'(usage balance: {self.n_used}, {len(self.unused_pool)} in unused pool)')
 
 class Pollable:
     ## Base class that wraps an open file descriptor fd for epoll()
@@ -170,8 +190,8 @@ class Pollable:
         ## called when wants_send is True and self.fd is clear to send
         pass
 
-    def send_frame(self, eth_frame):
-        ## send eth_frame to underlying device
+    def send_frame(self, frame_pbuf):
+        ## send ethernet frame in frame_pbuf to underlying device
         ## only implemented by WebSocketClient and BridgedTapDevice
         pass
 
@@ -194,6 +214,6 @@ class NetworkBackend:
         ## called by WebSocketClient.close(), even if attach_ws_client() was never called
         pass
 
-    def forward_from_ws_client(self, ws_client, eth_frame):
-        ## called by WebSocketClient.handle_ws_message() when a new eth_frame has arrived
+    def forward_from_ws_client(self, ws_client, frame_pbuf):
+        ## called by WebSocketClient.handle_ws_message() when a new frame_pbuf has arrived
         pass
