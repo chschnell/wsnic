@@ -6,7 +6,6 @@
 import logging, collections, socket, time, struct, base64, hashlib
 
 from wsnic import Pollable, MAX_PAYLOAD_SIZE
-#from wsnic.libwsnic import CWsMessageDecoder
 
 logger = logging.getLogger('websock')
 
@@ -257,7 +256,6 @@ class WebSocketClient(Pollable):
         logger.info(f'{self.addr}: accepted WebSocket client connection')
         ## begin decoding WebSocket messages with possible tail fragment from HTTP decoder in "ws_bytes"
         self.decoder = WsMessageDecoder(self)
-        #self.decoder = CWsMessageDecoder(self)
         self.decoder.decode(ws_bytes, len(ws_bytes))
 
     def handle_ws_message(self, op_code, payload_buf):
