@@ -1,6 +1,6 @@
 ##
-## wsnic - WebSocket to virtual network device proxy server for linux
-## Main entry point.
+## wsnic.py
+## Main entry point
 ##
 
 import os, re, logging, configparser, argparse, textwrap, time, ipaddress, select, shutil, subprocess

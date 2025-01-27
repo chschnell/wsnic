@@ -1,4 +1,4 @@
-from wsnic.main import main
+from wsnic.wsnic import main
 
 if __name__ == '__main__':
     main()
