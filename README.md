@@ -1,4 +1,5 @@
-**wsnic** is a WebSocket to virtual network proxy server for Linux.
+**wsnic** (or WebSocket-NIC) is a layer-2 proxy server that connects WebSocket clients to a shared virtual Linux bridge.
+If enabled, clients can access external networks (Internet) through wsnic.
 
 ## Overview
 
@@ -13,54 +14,43 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 
 ### Features
 
-* exchanges IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a virtual Linux network and any number of WebSocket clients
+* exchanges unmodified IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a virtual Linux network and any number of WebSocket clients
 * creates a single virtual [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network using NAT masquerading to grant Internet-access to WebSocket guests
-* supports WebSocket Secure (`wss://`) connections by offloading to [stunnel](https://www.stunnel.org/)
-* provides DHCP/DNS services to WebSocket guests by offloading to [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
+* supports WebSocket Secure (`wss://`) connections with [stunnel](https://www.stunnel.org/)
+* provides DHCP/DNS services to WebSocket guests with [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
 * sends periodic PINGs to idle WebSocket clients
-* written in Python3 with no external dependencies, uses a single-threaded [epoll](https://docs.python.org/3/library/select.html#edge-and-level-trigger-polling-epoll-objects)-loop for all I/O
+* written in Python3 with no external dependencies
 * see section [How it works](#how-it-works) for more details
 
 ## Docker installation
 
 First, follow the official [Docker installation instructions](https://docs.docker.com/engine/install/debian/) to install the latest Docker release.
 
-Next, either install the Docker container from Docker Hub or build it yourself.
-
-### Install from Docker Hub
-
-Pull the wsnic Docker container from Docker Hub using:
+Then pull the latest wsnic container from Docker Hub and run it with Internet-access for clients enabled (by the **`-i`** command line option) using:
 
 ```bash
-docker pull chschnell86/wsnic:latest
+docker run --rm --interactive --tty \
+    --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    -p 8086:8086 \
+    chschnell86/wsnic:latest -i
 ```
 
-### Build Docker container
-
-Clone this repository and build wsnic Docker container with example tag `wsnic:local` using:
+To instead run wsnic with WebSocket Secure (wss://) support use:
 
 ```bash
-git clone https://github.com/chschnell/wsnic.git
-cd wsnic
-
-docker buildx build -t wsnic:local .
-```
-
-### How to use the Docker image
-
-wsnic requires the following `docker run` command line arguments to be present (replace `chschnell86/wsnic:latest` with `wsnic:local` when using a self-build container):
-
-```bash
-docker run \
+docker run --rm --interactive --tty \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
     -p 8086:8086 \
     -p 8087:8087 \
-    chschnell86/wsnic:latest [WSNIC-OPTIONS]
+    -v ~/cert/cert.crt:/opt/wsnic/cert/cert.crt \
+    -v ~/cert/cert.key:/opt/wsnic/cert/cert.key \
+    chschnell86/wsnic:latest -i
 ```
 
-Brief description for each of these arguments, and why they're needed:
+Brief description for each of these Docker command line arguments, and why they're needed:
 
 * **--cap-add=NET_ADMIN**  
    Allow Docker application to modify internal Docker network, needed to add/remove network bridge and TAP devices.
@@ -70,79 +60,38 @@ Brief description for each of these arguments, and why they're needed:
    Maps the WebSocket (ws://) port number `<host-port>:<docker-port>` to host port 8086, for example `12345:8086` would instead expose wsnic on the host's port 12345.
 * **-p 8087:8087**  
    Maps the WebSocket Secure (wss://) port number to host port 8087, only needed when wss is used.
+* **-v ~/cert/cert.crt:/opt/wsnic/cert/cert.crt** (and similar)  
+   Maps the WebSocket Secure certificate file to `~/cert/cert.crt`.  
+   In order to pass files (`wsnic.conf`, `cert.crt` or `cert.key`) from the host into the Docker image they need to be volume mounted using Docker command line option `-v`. When running under Docker, upon startup wsnic checks for specific files at these fixed paths:
+  * **`/opt/wsnic/wsnic.conf`** for the wsnic configuration file
+  * **`/opt/wsnic/cert/cert.crt`** for the WebSocket Secure server certificate file
+  * **`/opt/wsnic/cert/cert.key`** for the WebSocket Secure private key file
 
-In order to pass files (`cert.crt`, `cert.key` or `wsnic.conf`) from the host into the Docker image they need to be volume mounted using Docker command line option `-v`. At startup, wsnic checks for these files at fixed paths:
+For further information, see sections:
 
-* `/opt/wsnic/wsnic.conf` for the wsnic configuration file
-* `/opt/wsnic/cert/cert.crt` for the server certificate file
-* `/opt/wsnic/cert/cert.key` for the private key file
+* **[CLI options](#cli-options)** about wsnic's command line interface (or use `-h`)
+* **[WebSocket Secure support](#websocket-secure-support)** about WebSocket Secure support (wss://)
 
-Full example (replace `/host/path` with the absolute file path in your local environment, and if using a self-build container `chschnell86/wsnic:latest` with `wsnic:local`):
-
-```bash
-docker run -rm --interactive --tty \
-    --cap-add=NET_ADMIN \
-    --device /dev/net/tun:/dev/net/tun \
-    -p 8086:8086 \
-    -p 8087:8087 \
-    -v /host/path/cert.crt:/opt/wsnic/cert/cert.crt \
-    -v /host/path/cert.key:/opt/wsnic/cert/cert.key \
-    chschnell86/wsnic:latest [WSNIC-OPTIONS]
-```
-
-Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
-
-## Source installation
-
-To use wsnic without Docker you can execute wsnic directly from its source code as described below. Instructions are tested with Debian 12 (Bookworm) netinst (without Desktop).
-
-> [!WARNING]
-> Unlike the Docker image this installation method will run directly on the
-> host, meaning it is **not isolated** from the host as is the case with Docker.
-> It is recommended to use this installation method only in a **virtual machine**
-> dedicated for this purpose in order to avoid unwanted system modifications in
-> case of a crash.
+> [!TIP]
+> To build the Docker container locally, clone this repository and build it with (for example) tag name `wsnic:local` using:
 >
-> Having said that, wsnic attempts to restore all system state back as it was
-> before starting, for example the host's network configuration and settings.
-
-First, make sure that the packages required by wsnic are installed:
-
-```bash
-sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
-```
-
-Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
-
-```bash
-sudo systemctl stop dnsmasq
-sudo systemctl disable dnsmasq
-```
-
-NOTE: `stunnel` is only required for `wss://` support and otherwise not needed.
-
-Next, clone a working copy of this repository:
-
-```bash
-git clone https://github.com/chschnell/wsnic.git
-```
-
-Finally, run wsnic using:
-
-```bash
-cd wsnic
-sudo ./wsnic.sh [WSNIC-OPTIONS]
-```
-
-Next see section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
+> ```bash
+> git clone https://github.com/chschnell/wsnic.git
+> cd wsnic
+>
+> docker buildx build -t wsnic:local .
+> ```
+>
+> The Docker command line to run it is the same as described above, just replace `chschnell86/wsnic:latest` with `wsnic:local`.
 
 ## CLI options
 
-wsnic supports configuration through its command line interface (CLI) and optionally by using a configuration file. Each setting in the configuration file corresponds to a CLI option (for example, CLI option `--foo-bar` corresponds to config setting `foo_bar`). Copy template file [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` for a quick-start if you want to use a configuration file.
+wsnic supports configuration through its Command Line Interface (**CLI**) and optionally by using a configuration file. Each setting in the configuration file has the same effect as a CLI option with a similar name, for example, CLI option `--foo-bar` has the same effect as configuration file setting `foo_bar`. Options specified on the command line take precedence over those in `wsnic.conf`.
 
-Options specified on the command line take precedence over those specified in `wsnic.conf`.
+> [!TIP]
+> Copy template file [`wsnic.conf.template`](./wsnic.conf.template) to `wsnic.conf` for a quick-start if you want to use a configuration file.
 
-Command line interface of wsnic:
+**Command line interface**
 
 ```
 usage: wsnic [-h] [-v] [-q] [-c CFGFILE] [-a ADDR] [--ws-port PORT]
@@ -226,51 +175,46 @@ options:
 
 ## WebSocket Secure support
 
-WebSocket Secure (`wss://`) support is optional and only enabled if a TLS server certificate is defined (either by CLI option or in `wsnic.conf`), which means you need:
+WebSocket Secure (`wss://`) support is optional and enabled by passing a TLS server certificate file to wsnic (either by CLI option or in `wsnic.conf`), which means you need:
 
 1. a DNS record for the hostname of your wsnic server
 2. a TLS server certificate issued for that DNS hostname
 
 If your wsnic server has a public DNS record for its hostname you should use a service like [Let’s Encrypt](https://letsencrypt.org/) to get a TLS certificate for it, otherwise you can create your own self-signed certificate as described in the next section.
 
-The following instructions use **`wsnic.example.com`** as the DNS hostname and **`/host/path`** as the directory where TLS certificate files are stored, you need to replace both consistently according to your setup and network environment.
-
-WebSocket Secure URLs are of the form `wss://wsnic.example.com:8087`.
-
 ### Self-signed TLS server certificate
-
-The DNS hostname doesn't need to be fully qualified in private networks, it might also be just `localhost` if wsnic (WebSocket server) and browser (WebSocket client) are running on the same machine.
 
 Setting up a self-signed certificate involves two steps, after generating it you also have to configure your browser to accept it.
 
+> [!NOTE]
+> The following instructions use **`localhost`** as the DNS hostname and **`/host/path`** as the directory where TLS certificate files are stored on the wsnic host, you need to replace both consistently according to your setup and network environment.
+
+> [!TIP]
+> Make sure to use the same **hostname** for the DNS hostname in the server certificate, in browser URLs and in HTTP server's virtual host definitions. For example, if you plan to run the server on the same machine as your browser, use `localhost` in all cases.
+
 #### Step 1/2: Generate a self-signed certificate
 
-To issue a basic self-signed TLS server certificate for DNS hostname `wsnic.example.com`:
+To issue a basic self-signed TLS server certificate for DNS hostname `localhost`:
 
 ```bash
 mkdir /host/path
 cd /host/path
 
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
-  -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com"
+  -nodes -keyout cert.key -out cert.crt -subj "/CN=localhost"
 ```
-
-You can also issue the certificate for additional DNS names and/or IP addresses, here an example that adds DNS hostname `wsnic2.example.com` and IP address `12.34.56.78`:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 \
-  -nodes -keyout cert.key -out cert.crt -subj "/CN=wsnic.example.com" \
-  -addext "subjectAltName=DNS:wsnic2.example.com,IP:12.34.56.78"
-```
-
-You can add multiple alternate DNS names and IP addresses, use comma `,` to separate them.
 
 #### Step 2/2: Setup browser to accept the self-signed certificate
 
-By default, modern browsers refuse to connect to HTTPS and WebSocket servers with self-signed TLS certificates. In order to get around that you have to grant permission in your browser. Start wsnic and point your browser at your wsnic server using a HTTPS URL like:
+By default, modern browsers refuse to connect to HTTPS (and WebSocket Secure) servers that present a self-signed certificate. In order to get around that you have to manually grant permission in your browser.
+
+> [!NOTE]
+> These instructions are for Mozilla Firefox. If you want to use Google Chrome, start `chrome` with command line options `--disable-web-security --ignore-certificate-errors --allow-running-insecure-content --user-data-dir=/tmp/chrome-temp`, and replace `/tmp/chrome-temp` with some directory for the session data.
+
+Start wsnic and direct your browser to your wsnic server using a HTTPS URL like:
 
 ```
-https://wsnic.example.com:8087
+https://localhost:8087
 ```
 
 You will get a security warning that you need to acknowledge once to grant permission permanently. After that you should see a reply page from wsnic's WebSocket server that reads:
@@ -282,6 +226,51 @@ You cannot access a WebSocket server directly with a browser. You need a WebSock
 ```
 
 This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
+
+## Source installation
+
+To use wsnic without Docker you can execute wsnic directly from its source code as described below. Instructions are tested with Debian 12 (Bookworm) netinst (without Desktop).
+
+> [!WARNING]
+> Unlike the Docker image this installation method will run directly on the
+> host, meaning it is **not isolated** from the host as is the case with Docker.
+> It is recommended to use this installation method only in a **virtual machine**
+> dedicated for this purpose in order to avoid unwanted system modifications in
+> case of a crash.
+>
+> Having said that, wsnic attempts to restore all system state back as it was
+> before starting, for example the host's network configuration and settings.
+
+> [!NOTE]
+> `stunnel` is only required for `wss://` support and otherwise not needed.
+
+First, make sure that the packages required by wsnic are installed:
+
+```bash
+sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
+```
+
+Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
+
+```bash
+sudo systemctl stop dnsmasq
+sudo systemctl disable dnsmasq
+```
+
+Next, clone a working copy of this repository:
+
+```bash
+git clone https://github.com/chschnell/wsnic.git
+```
+
+Finally, run wsnic using:
+
+```bash
+cd wsnic
+sudo ./wsnic.sh [WSNIC-OPTIONS]
+```
+
+See section **[CLI options](#cli-options)** for documentation on `WSNIC-OPTIONS` (or use `-h`).
 
 ## Troubleshooting
 
@@ -359,19 +348,39 @@ Overview of wsnic and its network components:
 
 Roughly, wsnic works like this:
 
-* On startup, wsnic:
-  * creates virtual bridge `wsbr0` and assigns it the subnet's first IP address,
-  * optionally attaches `wsbr0` to the physical network adapter `eth0` using NAT,
+* Upon startup, wsnic:
+  * creates virtual bridge `wsbr0` and assigns it the subnet's first available IP address,
+  * optionally attaches `wsbr0` to a physical network adapter named (for instance) `eth0` using NAT,
   * optionally starts DHCP server `dnsmasq` and binds it to the IP address of `wsbr0`, and
   * starts operating as the WebSocket server, listening for WebSocket client connections
-* After completing the handshake of a newly accepted WebSocket client connection `wsX`, wsnic:
+* After completing the handshake with a newly accepted WebSocket client connection `wsX`, wsnic:
   * creates a TAP device `wstapX`,
   * connects `wstapX` to `wsbr0`, and
   * begins passing ethernet frames between `wsX` and `wstapX`
 * If a WebSocket client disconnects, wsnic removes the associated TAP device from the bridge (and network)
 * DHCP server `dnsmasq` assigns DHCP leases to WebSocket clients, it is also the default DNS server
 
+wsnic avoids allocating and copying internal buffers by maintaining a buffer pool and using vectored I/O where possible ([`socket.sendmsg()`](https://docs.python.org/3/library/socket.html#socket.socket.sendmsg) and [`os.writev()`](https://docs.python.org/3/library/os.html#os.writev) for gathering `write`, multiple attempts to implement scattering `read` for TAP devices have so far failed, see also [TODO](#todo)).
+
+## TODO
+
+### Scattering read from TAP device
+
+WebSocket clients typically send few and receive many packets, which makes the read performance of the TAP device a possible I/O bottleneck in wsnic.
+
+What is needed is some function that reads multiple different-sized packets from a TAP device (as a file or socket) into a set of preallocated buffers at once, non-blocking and returning complete packets only. Only as many packets as are currently available should be returned, possibly zero.
+
+The problem is that the only suitable function in Linux for scattering read of packets with varying sizes seems to be [`recvmmsg()`](https://man7.org/linux/man-pages/man2/recvmmsg.2.html) which needs a socket file descriptor.
+
+Yet various attempts to create a proper socket for the TAP device failed so far (tried `socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)` and `socket(AF_PACKET, SOCK_RAW)` with and without `ETH_P_ALL`, `setsockopt(SOL_SOCKET, SO_BINDTODEVICE, <0-terminated-bytes-string>)`. Opening the socket and various tested `ioctl()` calls work, but sending and/or receiving fails.
+
+So all that is given is the regular, non-socket TAP file descriptor returned by [`os.open()`](https://docs.python.org/3/library/os.html#os.open) which is incompatible with `recvmmsg()`, all that can be done is to read TAP packets one by one using [`os.readv()`](https://docs.python.org/3/library/os.html#os.readv) with a single (preallocated) packet buffer per call. Any help/ideas here would be greatly appreciated!.
+
+### io_uring
+
+[io_uring](https://unixism.net/loti/what_is_io_uring.html) looks like an efficient approach for vectored I/O for both socket and TAP file descriptors, there are Python examples on the web and there's at least one Python wrapper library [Liburing](https://github.com/YoSTEALTH/Liburing).
+
 ## Credits
 
-* [v86](https://github.com/copy/v86), the browser-based x86 emulator wsnic was developed for.
+* [v86](https://github.com/copy/v86), the browser-based x86 emulator which wsnic was developed for.
 * [websockproxy](https://github.com/benjamincburns/websockproxy), the project that inspired wsnic.
