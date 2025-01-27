@@ -366,7 +366,7 @@ wsnic avoids allocating and copying internal buffers by maintaining a buffer poo
 
 ### Scattering read from TAP device
 
-WebSocket clients typically send few and receive many packets, which makes the read performance of the TAP device a possible I/O bottleneck in wsnic.
+WebSocket clients typically send few and receive many packets, which makes the read performance of TAP devices a possible I/O bottleneck in wsnic.
 
 What is needed is some function that reads multiple different-sized packets from a TAP device (as a file or socket) into a set of preallocated buffers at once, non-blocking and returning complete packets only. Only as many packets as are currently available should be returned, possibly zero.
 
