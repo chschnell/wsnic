@@ -34,7 +34,7 @@ docker run --rm --interactive --tty \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
     -p 8086:8086 \
-    chschnell86/wsnic:latest -i
+    chschnell86/wsnic -i
 ```
 
 To instead run wsnic with WebSocket Secure (wss://) support use:
@@ -47,7 +47,7 @@ docker run --rm --interactive --tty \
     -p 8087:8087 \
     -v ~/cert/cert.crt:/opt/wsnic/cert/cert.crt \
     -v ~/cert/cert.key:/opt/wsnic/cert/cert.key \
-    chschnell86/wsnic:latest -i
+    chschnell86/wsnic -i
 ```
 
 Brief description for each of these Docker command line arguments, and why they're needed:
@@ -82,7 +82,7 @@ For further information, see sections:
 > docker buildx build -t wsnic:local .
 > ```
 >
-> The Docker command line to run it is the same as described above, just replace `chschnell86/wsnic:latest` with `wsnic:local`.
+> The Docker command line to run it is the same as described above, just replace `chschnell86/wsnic` with `wsnic:local`.
 
 ## CLI options
 
