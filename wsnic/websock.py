@@ -60,11 +60,11 @@ class WsHandshakeDecoder:
         ## parse HTTP request start line, for example "GET / HTTP/1.1\r\n"
         eol_ofs = data.find(b'\r\n', 0, data_len)
         if eol_ofs < 0:
-            logger.debug(f'{self.addr}: request dropped, reason: missing HTTP request start line')
+            logger.debug(f'{self.ws_client.addr}: request dropped, reason: missing HTTP request start line')
             return None
         start_line_fields = data[ : eol_ofs].split(b' ')
         if len(start_line_fields) != 3 or start_line_fields[0].upper() != b'GET':
-            logger.debug(f'{self.addr}: request dropped, reason: malformed HTTP request start line')
+            logger.debug(f'{self.ws_client.addr}: request dropped, reason: malformed HTTP request start line')
             return None
         cursor = eol_ofs + 2
 
@@ -76,7 +76,7 @@ class WsHandshakeDecoder:
                 eol_ofs = data_len
             colon_ofs = data.find(0x3A, cursor, eol_ofs)    ## 0x3A: ASCII colon ":"
             if colon_ofs < 0:
-                logger.debug(f'{self.addr}: request dropped, reason: missing colon in HTTP header line')
+                logger.debug(f'{self.ws_client.addr}: request dropped, reason: missing colon in HTTP header line')
                 return None
             header_name = data[cursor : colon_ofs].lower()
             if header_name in [b'sec-websocket-key', b'upgrade']:
@@ -217,8 +217,8 @@ class WebSocketClient(Pollable):
         self.decoder = WsHandshakeDecoder(self)    ## either WsHandshakeDecoder or WsMessageDecoder
         self.outq_pbuf = collections.deque()       ## bytes-like objects queued for sending to self.sock, possibly originating from buffer_pool
         self.closing = False                       ## bool, close connection as soon as self.outq_pbuf is drained
-        self.last_recv_tm = time.time()            ## int, most recent time any data was received from self.sock
-        self.last_ping_tm = self.last_recv_tm      ## int, most recent time a PING was sent to self.sock
+        self.last_msg_recv_tm = time.time()        ## int, most recent time any data was received from self.sock
+        self.last_ping_tm = self.last_msg_recv_tm  ## int, most recent time a PING was sent to self.sock
         self.sock = None                           ## socket, TCP client socket accepted by WebSocketServer
         self.addr = None                           ## string, remote client address "IP:PORT"
         self.nbe_data = None                       ## opaque pointer reserved for NetworkBackend
@@ -281,6 +281,7 @@ class WebSocketClient(Pollable):
             else:
                 logger.warning(f'{self.addr}: unexpected WebSocket message op_code={op_code} len=0')
             self.buffer_pool.put_buffer(payload_pbuf)
+        self.last_msg_recv_tm = time.time()
 
     def _send_ws_message(self, op_code, payload_pbuf):
         if self.sock is not None:
@@ -320,7 +321,6 @@ class WebSocketClient(Pollable):
                 recv_len = self.sock.recv_into(recv_buf)
                 if recv_len > 0:
                     self.decoder.decode(recv_buf, recv_len)
-                    self.last_recv_tm = time.time()
                 else:
                     if recv_len == 0:
                         self.close(f'received EOF in sock.recv_into()')
@@ -334,10 +334,15 @@ class WebSocketClient(Pollable):
             self.close(f'error in socket.recv_into(): {e}')
 
     def refresh(self, tm_now):
-        if tm_now - self.last_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
-            self.last_ping_tm = tm_now
-            self._send_ws_message(OP_CODE_PING, b'PING')
-            logger.debug(f'{self.addr}: sent PING to idle WebSocket client')
+        if tm_now - self.last_msg_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
+            if isinstance(self.decoder, WsHandshakeDecoder):
+                self.close(f'HTTP client idle timeout, giving up')
+            elif tm_now - self.last_msg_recv_tm > 100:
+                self.close(f'WebSocket client idle timeout, giving up')
+            else:
+                self._send_ws_message(OP_CODE_PING, b'PING')
+                self.last_ping_tm = tm_now
+                logger.debug(f'{self.addr}: sent PING to idle WebSocket client')
 
 class WebSocketServer(Pollable):
     def __init__(self, server):
@@ -380,5 +385,6 @@ class WebSocketServer(Pollable):
         self.ws_clients.discard(ws_client)
 
     def refresh(self, tm_now):
-        for ws_client in self.ws_clients:
+        ## traverse a copy of set self.ws_clients since it might change during iteration
+        for ws_client in list(self.ws_clients):
             ws_client.refresh(tm_now)
