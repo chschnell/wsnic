@@ -157,16 +157,15 @@ class WsMessageDecoder:
                 data_ofs += 1
             if self.decode_state == MSG_DECODE_LEN7:
                 self.payload_masked = bool(data[data_ofs] & WS_MASKED_BIT)
-                self.payload_len = 0
                 payload_len = data[data_ofs] & WS_PAYLOAD_BITS   ## payload_len: 0 ... 127
-                if payload_len == 0:
-                    self._set_decode_state(MSG_DECODE_DONE)
-                elif payload_len < 126:
+                if payload_len < 126:
                     self.payload_len = payload_len
                     self._set_decode_state(MSG_DECODE_MASK)
                 elif payload_len == 126:
+                    self.payload_len = 0
                     self._set_decode_state(MSG_DECODE_LEN16)
                 else:
+                    self.payload_len = 0
                     self._set_decode_state(MSG_DECODE_LEN64)
                 data_ofs += 1
             if self.decode_state == MSG_DECODE_LEN16:
