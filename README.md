@@ -15,12 +15,13 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 ### Features
 
 * exchanges unmodified IEEE 802.3 [ethernet frames](https://en.wikipedia.org/wiki/Ethernet_frame) between a virtual Linux network and any number of WebSocket clients
-* creates a single virtual [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
+* creates a single, shared virtual [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network using NAT masquerading to grant Internet-access to WebSocket guests
 * supports WebSocket Secure (`wss://`) connections with [stunnel](https://www.stunnel.org/)
 * provides DHCP/DNS services to WebSocket guests with [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
-* sends periodic PINGs to idle WebSocket clients
-* written in Python3 with no external dependencies
+* uses a buffer pool and vectored I/O where possible
+* sends periodic PINGs to idle WebSocket clients, drops unresponsive clients after timeout
+* written in Python3 with no external Python dependencies
 * see section [How it works](#how-it-works) for more details
 
 ## Docker installation
