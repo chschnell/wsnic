@@ -149,17 +149,16 @@ class WsMessageDecoder:
         self.decode_substate = 0
 
     def _decode_header(self, data, data_ofs, data_len):
-        while data_ofs < data_len and self.decode_state < MSG_DECODE_PAYLOAD:
-            data_byte = data[data_ofs]
-            data_ofs += 1
+        try:
             if self.decode_state == MSG_DECODE_START:
-                self.op_code = data_byte & WS_OP_CODE_BITS
-                self.fin_flag = bool(data_byte & WS_FIN_BIT)
+                self.op_code = data[data_ofs] & WS_OP_CODE_BITS
+                self.fin_flag = bool(data[data_ofs] & WS_FIN_BIT)
                 self._set_decode_state(MSG_DECODE_LEN7)
-            elif self.decode_state == MSG_DECODE_LEN7:
-                self.payload_masked = bool(data_byte & WS_MASKED_BIT)
+                data_ofs += 1
+            if self.decode_state == MSG_DECODE_LEN7:
+                self.payload_masked = bool(data[data_ofs] & WS_MASKED_BIT)
                 self.payload_len = 0
-                payload_len = data_byte & WS_PAYLOAD_BITS   ## payload_len: 0 ... 127
+                payload_len = data[data_ofs] & WS_PAYLOAD_BITS   ## payload_len: 0 ... 127
                 if payload_len == 0:
                     self._set_decode_state(MSG_DECODE_DONE)
                 elif payload_len < 126:
@@ -169,23 +168,27 @@ class WsMessageDecoder:
                     self._set_decode_state(MSG_DECODE_LEN16)
                 else:
                     self._set_decode_state(MSG_DECODE_LEN64)
-            elif self.decode_state == MSG_DECODE_LEN16:
-                self.payload_len = self.payload_len << 8 | data_byte
+                data_ofs += 1
+            if self.decode_state == MSG_DECODE_LEN16:
+                self.payload_len = self.payload_len << 8 | data[data_ofs]
                 self.decode_substate += 1
                 if self.decode_substate == 2:
                     self._set_decode_state(MSG_DECODE_MASK)
-            elif self.decode_state == MSG_DECODE_LEN64:
-                self.payload_len = self.payload_len << 8 | data_byte
+                data_ofs += 1
+            if self.decode_state == MSG_DECODE_LEN64:
+                self.payload_len = self.payload_len << 8 | data[data_ofs]
                 self.decode_substate += 1
                 if self.decode_substate == 8:
                     self._set_decode_state(MSG_DECODE_MASK)
-            elif self.decode_state == MSG_DECODE_MASK:
-                self.payload_mask[self.decode_substate] = data_byte
+                data_ofs += 1
+            if self.decode_state == MSG_DECODE_MASK:
+                self.payload_mask[self.decode_substate] = data[data_ofs]
                 self.decode_substate += 1
                 if self.decode_substate == 4:
                     self._set_decode_state(MSG_DECODE_PAYLOAD)
-            else:
-                raise Exception(f'unexpected decode_state {self.decode_state} in WebSocket decoder')
+                data_ofs += 1
+        except IndexError:
+            pass
         return data_ofs
 
     def _decode_payload(self, data, data_ofs, data_len):
