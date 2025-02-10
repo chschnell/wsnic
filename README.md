@@ -19,7 +19,6 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 * supports attaching the bridge to a physical network using NAT masquerading to grant Internet-access to WebSocket guests
 * supports WebSocket Secure (`wss://`) connections with [stunnel](https://www.stunnel.org/)
 * provides DHCP/DNS services to WebSocket guests with [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
-* uses a buffer pool and vectored I/O where possible
 * sends periodic PINGs to idle WebSocket clients, drops unresponsive clients after timeout
 * written in Python3 with no external Python dependencies
 * see section [How it works](#how-it-works) for more details
@@ -361,25 +360,7 @@ Roughly, wsnic works like this:
 * If a WebSocket client disconnects, wsnic removes the associated TAP device from the bridge (and network)
 * DHCP server `dnsmasq` assigns DHCP leases to WebSocket clients, it is also the default DNS server
 
-wsnic avoids allocating and copying internal buffers by maintaining a buffer pool and using vectored I/O where possible ([`socket.sendmsg()`](https://docs.python.org/3/library/socket.html#socket.socket.sendmsg) and [`os.writev()`](https://docs.python.org/3/library/os.html#os.writev) for gathering `write`, multiple attempts to implement scattering `read` for TAP devices have so far failed, see also [TODO](#todo)).
-
-## TODO
-
-### Scattering read from TAP device
-
-WebSocket clients typically send few and receive many packets, which makes the read performance of TAP devices a possible I/O bottleneck in wsnic.
-
-What is needed is some function that reads multiple different-sized packets from a TAP device (as a file or socket) into a set of preallocated buffers at once, non-blocking and returning complete packets only. Only as many packets as are currently available should be returned, possibly zero.
-
-The problem is that the only suitable function in Linux for scattering read of packets with varying sizes seems to be [`recvmmsg()`](https://man7.org/linux/man-pages/man2/recvmmsg.2.html) which needs a socket file descriptor.
-
-Yet various attempts to create a proper socket for the TAP device failed so far (tried `socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)` and `socket(AF_PACKET, SOCK_RAW)` with and without `ETH_P_ALL`, `setsockopt(SOL_SOCKET, SO_BINDTODEVICE, <0-terminated-bytes-string>)`. Opening the socket and various tested `ioctl()` calls work, but sending and/or receiving fails.
-
-So all that is given is the regular, non-socket TAP file descriptor returned by [`os.open()`](https://docs.python.org/3/library/os.html#os.open) which is incompatible with `recvmmsg()`, all that can be done is to read TAP packets one by one using [`os.readv()`](https://docs.python.org/3/library/os.html#os.readv) with a single (preallocated) packet buffer per call. Any help/ideas here would be greatly appreciated!.
-
-### io_uring
-
-[io_uring](https://unixism.net/loti/what_is_io_uring.html) looks like an efficient approach for vectored I/O for both socket and TAP file descriptors, there are Python examples on the web and there's at least one Python wrapper library [Liburing](https://github.com/YoSTEALTH/Liburing).
+wsnic avoids allocating and copying internal buffers by using a buffer pool where possible.
 
 ## Credits
 

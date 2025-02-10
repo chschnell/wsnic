@@ -305,7 +305,14 @@ class WebSocketClient(Pollable):
             return
         if self.outq_pbuf:
             try:
-                self.sock.sendmsg(self.outq_pbuf)
+                # Using vectored I/O (gathering send) can result in a "message too long" exception, use sequential sock.send()
+                # self.sock.sendmsg(self.outq_pbuf)
+                #
+                for data_buf in self.outq_pbuf:
+                    n_sent = self.sock.send(data_buf)
+                    if n_sent != len(data_buf):
+                        logger.warning('{self.addr}: ws send buffer overflow!')
+                        # TODO: break and remove sent items from self.outq_pbuf, but keep unsent fragment
                 self._clear_out()
             except OSError as e:
                 self.close(f'error in socket.sendmsg(): {e}')

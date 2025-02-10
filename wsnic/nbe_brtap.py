@@ -137,7 +137,14 @@ class BridgedTapDevice(Pollable):
 
     def send_ready(self):
         if self.outq_pbuf:
-            os.writev(self.tap_fd, self.outq_pbuf)
+            # Using vectored I/O (gathering send) merges packets into one, use sequential os.write()
+            # os.writev(self.tap_fd, self.outq_pbuf)
+            #
+            for frame_pbuf in self.outq_pbuf:
+                n_sent = os.write(self.tap_fd, frame_pbuf)
+                if n_sent != len(frame_pbuf):
+                    logger.warning('{self.tap_iface}: TAP device send buffer overflow in os.write()!')
+                    # TODO: break and remove sent items from self.outq_pbuf, but keep unsent fragment
             self._clear_out()
         self.wants_send(False)
 
