@@ -10,6 +10,7 @@ import os, logging, collections
 
 from wsnic import NetworkBackend, Pollable, Exec, mac2str, random_private_mac
 from wsnic.dnsmasq import Dnsmasq
+from wsnic.iperf import IperfServer
 from wsnic.tuntap import open_tap
 
 logger = logging.getLogger('brtap')
@@ -19,6 +20,7 @@ class BridgedTapNetworkBackend(NetworkBackend):
         super().__init__(server)
         self.br_iface = 'wsbr0'
         self.dhcp_server = None
+        self.iperf_server = None
         self.is_opened = False
         self.restrict_inbound = True
 
@@ -54,10 +56,16 @@ class BridgedTapNetworkBackend(NetworkBackend):
         if not self.config.disable_dhcp:
             self.dhcp_server = Dnsmasq(self.server)
             self.dhcp_server.open(self.br_iface)
+        if self.config.enable_iperf:
+            self.iperf_server = IperfServer(self.server)
+            self.iperf_server.open()
 
     def close(self):
         if not self.is_opened:
             return
+        if self.iperf_server:
+            self.iperf_server.close()
+            self.iperf_server = None
         if self.dhcp_server:
             self.dhcp_server.close()
             self.dhcp_server = None

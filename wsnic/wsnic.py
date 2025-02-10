@@ -8,6 +8,7 @@ import os, re, logging, configparser, argparse, textwrap, time, ipaddress, selec
 from wsnic import BufferPool
 from wsnic.websock import WebSocketServer
 from wsnic.stunnel import StunnelProxyServer
+
 from wsnic.nbe_brtap import BridgedTapNetworkBackend
 
 logger = logging.getLogger('wsnic')
@@ -19,7 +20,7 @@ class WsnicConfig:
                 return re.split(r'[,:;\s]+', opt_value)
             elif opt_name in ['ws_port', 'wss_port', 'dhcp_lease_time']:
                 return int(opt_value)
-            elif opt_name in ['enable_inet', 'disable_dhcp']:
+            elif opt_name in ['enable_inet', 'disable_dhcp', 'enable_iperf']:
                 return opt_value.lower() in ['yes', 'true', 't', '1']
             elif opt_value == '':
                 return None
@@ -40,6 +41,7 @@ class WsnicConfig:
         self.dhcp_lease_time = 86400    ## int, DHCP lease time in seconds
         self.dhcp_domain_name = None    ## str, local domain name published in DHCP replies
         self.dhcp_nameserver = None     ## array(str), list of DNS server IPs
+        self.enable_iperf = False       ## bool, True: run iperf server for clients
 
         ## check for Docker: Docker creates "/.dockerenv", podman "/run/.containerenv"
         is_docker_env = os.path.isfile('/.dockerenv') or os.path.isfile('/run/.containerenv')
@@ -257,6 +259,8 @@ def main():
         'If undefined, the bridge\'s IP address is used as the DNS address'
         ' (which gets handled by dnsmasq).\n'
         'Optional, default: undefined.'))
+    parser.add_argument('-p', '--enable-iperf', action='store_const', const='1', help=format_help(
+        'Run an iperf server on bridge for clients.'))
     args = parser.parse_args()
 
     if os.geteuid() != 0:
@@ -283,6 +287,9 @@ def main():
         return
     elif not config.disable_dhcp and shutil.which('dnsmasq') is None:
         print(f'error: executable file "dnsmasq" not found (Debian: install apt package dnsmasq)')
+        return
+    elif config.enable_iperf and shutil.which('iperf') is None:
+        print(f'error: executable file "iperf" not found (Debian: install apt package iperf)')
         return
     elif config.enable_inet and not config.inet_iface:
         print(f'error: network interface must be specified, see CLI option "-f"')

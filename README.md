@@ -18,7 +18,7 @@ For WebSocket Secure support (wss://) see section **[WebSocket Secure support](#
 * creates a single, shared virtual [bridge](https://wiki.archlinux.org/title/Network_bridge) and one [TAP device](https://en.wikipedia.org/wiki/TUN/TAP) per WebSocket client
 * supports attaching the bridge to a physical network using NAT masquerading to grant Internet-access to WebSocket guests
 * supports WebSocket Secure (`wss://`) connections with [stunnel](https://www.stunnel.org/)
-* provides DHCP/DNS services to WebSocket guests with [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html)
+* provides DHCP, DNS and iperf2 services to WebSocket guests using [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html) and [iperf](https://iperf.fr/)
 * sends periodic PINGs to idle WebSocket clients, drops unresponsive clients after timeout
 * written in Python3 with no external Python dependencies
 * see section [How it works](#how-it-works) for more details
@@ -95,9 +95,9 @@ wsnic supports configuration through its Command Line Interface (**CLI**) and op
 
 ```
 usage: wsnic [-h] [-v] [-q] [-c CFGFILE] [-a ADDR] [--ws-port PORT]
-             [--wss-port PORT] [-r CRTFILE] [-k KEYFILE] [-s SUBNET]
-             [-i] [-f IFACE] [--disable-dhcp] [--dhcp-lease-file DBFILE]
-             [-t SECONDS] [-n NAME] [-d IPLIST]
+             [--wss-port PORT] [-r CRTFILE] [-k KEYFILE] [-s SUBNET] [-i]
+             [-f IFACE] [--disable-dhcp] [--dhcp-lease-file DBFILE]
+             [-t SECONDS] [-n NAME] [-d IPLIST] [-p]
 
 WebSocket to virtual network device proxy server.
 
@@ -171,6 +171,8 @@ options:
           If undefined, the bridge's IP address is used as the DNS
           address (which gets handled by dnsmasq).
           Optional, default: undefined.
+    -p, --enable-iperf
+          Run an iperf server on bridge for clients.
 ```
 
 ## WebSocket Secure support
@@ -247,7 +249,7 @@ To use wsnic without Docker you can execute wsnic directly from its source code 
 First, make sure that the packages required by wsnic are installed:
 
 ```bash
-sudo apt install python3-venv iproute2 iptables dnsmasq stunnel
+sudo apt install python3-venv iproute2 iptables dnsmasq stunnel iperf
 ```
 
 Stop and disable the systemd dnsmasq service with (if you want to run it, make sure that it does not bind to newly created network devices):
@@ -338,7 +340,7 @@ Overview of wsnic and its network components:
 +-----------------+-------------+----+
                   |             |
           NAT (MASQUERADE)      |
-                  |         [dnsmasq]   (DHCP server)
+                  |          [server]   (dnsmasq and iperf for DHCP/DNS/iperf)
                +--+---+
                | eth0 |                 (physical network)
                +--+---+
@@ -352,6 +354,7 @@ Roughly, wsnic works like this:
   * creates virtual bridge `wsbr0` and assigns it the subnet's first available IP address,
   * optionally attaches `wsbr0` to a physical network adapter named (for instance) `eth0` using NAT,
   * optionally starts DHCP server `dnsmasq` and binds it to the IP address of `wsbr0`, and
+  * optionally starts iperf server `iperf` and binds it to the IP address of `wsbr0`, and
   * starts operating as the WebSocket server, listening for WebSocket client connections
 * After completing the handshake with a newly accepted WebSocket client connection `wsX`, wsnic:
   * creates a TAP device `wstapX`,

@@ -73,3 +73,8 @@ dhcp_domain_name=
 # Comma-separated list of DNS IP address(es) published in DHCP replies (optional).
 #
 dhcp_nameserver=
+
+#
+# Enable iperf server for clients.
+#
+enable_iperf=0

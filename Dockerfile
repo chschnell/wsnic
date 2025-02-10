@@ -18,7 +18,7 @@ WORKDIR /opt/wsnic
 
 # Install required apt packages.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iproute2 iptables dnsmasq stunnel && \
+    apt-get install -y --no-install-recommends iproute2 iptables dnsmasq stunnel iperf && \
     apt-get clean
 
 # Copy Python source code into the container.
