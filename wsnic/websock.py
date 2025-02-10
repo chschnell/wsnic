@@ -31,7 +31,7 @@ MSG_DECODE_MASK    = 4
 MSG_DECODE_PAYLOAD = 5
 MSG_DECODE_DONE    = 255
 
-class WsHandshakeDecoder:
+class HttpHandshakeDecoder:
     def __init__(self, ws_client):
         self.ws_client = ws_client
         self.request_buffer = bytearray()
@@ -48,7 +48,7 @@ class WsHandshakeDecoder:
         raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
         sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
         sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
-        self.ws_client.handle_ws_handshake(sec_websocket_accept, memoryview(self.request_buffer)[ header_stop_ofs + 4 : ])
+        self.ws_client.handle_http_handshake(sec_websocket_accept, memoryview(self.request_buffer)[ header_stop_ofs + 4 : ])
 
     def cleanup(self):
         pass
@@ -98,17 +98,17 @@ class WsHandshakeDecoder:
 
 class WsMessageDecoder:
     def __init__(self, ws_client):
-        self.ws_client = ws_client           ## parent WebSocketClient
+        self.ws_client = ws_client               ## parent WebSocketClient
         self.buffer_pool = ws_client.buffer_pool ## BufferPool, shared pool of buffers
-        self.op_code = None                  ## int, one of OP_CODE_*
-        self.fin_flag = False                ## bool, True: current message has FIN flag set (TODO)
-        self.payload_len = 0                 ## int, payload length of current message
-        self.payload_masked = False          ## bool, True: payload is XOR masked with payload_mask
-        self.payload_mask = bytearray(4)     ## 32 bit XOR mask
-        self.payload_pbuf = None             ## pooled_bytearray, current payload buffer
-        self.payload_cursor = None           ## int, cursor into payload_pbuf[]
-        self.decode_state = MSG_DECODE_START ## int, one of MSG_DECODE_*
-        self.decode_substate = None          ## int, sub-state depending on decode_state
+        self.op_code = None                      ## int, one of OP_CODE_*
+        self.fin_flag = False                    ## bool, True: current message has FIN flag set (TODO)
+        self.payload_len = 0                     ## int, payload length of current message
+        self.payload_masked = False              ## bool, True: payload is XOR masked with payload_mask
+        self.payload_mask = bytearray(4)         ## 32 bit XOR mask
+        self.payload_pbuf = None                 ## pooled_bytearray, current payload buffer
+        self.payload_cursor = None               ## int, cursor into payload_pbuf[]
+        self.decode_state = MSG_DECODE_START     ## int, one of MSG_DECODE_*
+        self.decode_substate = None              ## int, sub-state depending on decode_state
 
     def decode(self, data, data_len):
         data_ofs = 0
@@ -213,13 +213,58 @@ class WsMessageDecoder:
         for i in range(payload_len - payload_len32):
             payload_pbuf[payload_len32 + i] ^= payload_mask[i]
 
+class WebSocketServer(Pollable):
+    def __init__(self, server):
+        super().__init__(server)
+        self.addr = f'{self.config.ws_address}:{self.config.ws_port}'
+        self.ws_clients = set()
+        self.srv_sock = None
+
+    def open(self):
+        self.srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.srv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.srv_sock.bind((self.config.ws_address, self.config.ws_port))
+        self.srv_sock.setblocking(0)
+        self.srv_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.srv_sock.listen(1)
+        super().open(self.srv_sock.fileno())
+        logger.info(f'{self.addr}: WebSocket server listening')
+
+    def close(self, reason='unknown'):
+        super().close()
+        ws_clients = self.ws_clients
+        self.ws_clients = set()
+        for ws_client in ws_clients:
+            ws_client.close(reason)
+        if self.srv_sock:
+            self.srv_sock.close()
+            self.srv_sock = None
+            logger.info(f'WebSocket server closed, reason: {reason}')
+
+    def recv_ready(self):
+        sock, addr = self.srv_sock.accept()
+        sock.setblocking(0)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        ws_client = WebSocketClient(self)
+        ws_client.open(sock, addr)
+        self.ws_clients.add(ws_client)
+        logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
+
+    def remove_client(self, ws_client):
+        self.ws_clients.discard(ws_client)
+
+    def refresh(self, tm_now):
+        ## traverse a copy of set self.ws_clients since it might change during iteration
+        for ws_client in list(self.ws_clients):
+            ws_client.refresh(tm_now)
+
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
         super().__init__(ws_server.server)
         self.ws_server = ws_server                 ## WebSocketServer, the server that created this instance
         self.buffer_pool = self.server.buffer_pool ## BufferPool, shared pool of buffers
         self.sock_recv_buf = bytearray(65536)      ## fixed buffer for socket.recv_into()
-        self.decoder = WsHandshakeDecoder(self)    ## either WsHandshakeDecoder or WsMessageDecoder
+        self.decoder = HttpHandshakeDecoder(self)  ## either HttpHandshakeDecoder or WsMessageDecoder
         self.outq_pbuf = collections.deque()       ## bytes-like objects queued for sending to self.sock, possibly originating from buffer_pool
         self.closing = False                       ## bool, close connection as soon as self.outq_pbuf is drained
         self.last_msg_recv_tm = time.time()        ## int, most recent time any data was received from self.sock
@@ -249,9 +294,9 @@ class WebSocketClient(Pollable):
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
 
-    def handle_ws_handshake(self, sec_websocket_accept, ws_bytes):
-        ## called by WsHandshakeDecoder.decode()
-        ## send handshake response
+    def handle_http_handshake(self, sec_websocket_accept, ws_bytes):
+        ## called by HttpHandshakeDecoder.decode()
+        ## send HTTP accept WebSocket handshake response
         self.outq_pbuf.append(b'\r\n'.join([
             b'HTTP/1.1 101 Switching Protocols',
             b'Connection: Upgrade',
@@ -347,7 +392,7 @@ class WebSocketClient(Pollable):
 
     def refresh(self, tm_now):
         if tm_now - self.last_msg_recv_tm > 30 and tm_now - self.last_ping_tm > 30:
-            if isinstance(self.decoder, WsHandshakeDecoder):
+            if isinstance(self.decoder, HttpHandshakeDecoder):
                 self.close(f'HTTP client idle timeout, giving up')
             elif tm_now - self.last_msg_recv_tm > 100:
                 self.close(f'WebSocket client idle timeout, giving up')
@@ -355,48 +400,3 @@ class WebSocketClient(Pollable):
                 self._send_ws_message(OP_CODE_PING, b'PING')
                 self.last_ping_tm = tm_now
                 logger.debug(f'{self.addr}: sent PING to idle WebSocket client')
-
-class WebSocketServer(Pollable):
-    def __init__(self, server):
-        super().__init__(server)
-        self.addr = f'{self.config.ws_address}:{self.config.ws_port}'
-        self.ws_clients = set()
-        self.srv_sock = None
-
-    def open(self):
-        self.srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.srv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.srv_sock.bind((self.config.ws_address, self.config.ws_port))
-        self.srv_sock.setblocking(0)
-        self.srv_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.srv_sock.listen(1)
-        super().open(self.srv_sock.fileno())
-        logger.info(f'{self.addr}: WebSocket server listening')
-
-    def close(self, reason='unknown'):
-        super().close()
-        ws_clients = self.ws_clients
-        self.ws_clients = set()
-        for ws_client in ws_clients:
-            ws_client.close(reason)
-        if self.srv_sock:
-            self.srv_sock.close()
-            self.srv_sock = None
-            logger.info(f'WebSocket server closed, reason: {reason}')
-
-    def recv_ready(self):
-        sock, addr = self.srv_sock.accept()
-        sock.setblocking(0)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        ws_client = WebSocketClient(self)
-        ws_client.open(sock, addr)
-        self.ws_clients.add(ws_client)
-        logger.info(f'{self.addr}: accepted TCP connection from {ws_client.addr}')
-
-    def remove_client(self, ws_client):
-        self.ws_clients.discard(ws_client)
-
-    def refresh(self, tm_now):
-        ## traverse a copy of set self.ws_clients since it might change during iteration
-        for ws_client in list(self.ws_clients):
-            ws_client.refresh(tm_now)
