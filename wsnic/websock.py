@@ -118,6 +118,8 @@ class WsMessageDecoder:
             if self.decode_state == MSG_DECODE_PAYLOAD:
                 data_ofs = self._decode_payload(data, data_ofs, data_len)
             if self.decode_state == MSG_DECODE_DONE:
+                if self.payload_masked:
+                    self._unmask_payload(self.payload_pbuf, self.payload_len, self.payload_mask)
                 self.ws_client.handle_ws_message(self.op_code, self.payload_pbuf)
                 self.payload_pbuf = None
                 self._set_decode_state(MSG_DECODE_START)
@@ -191,21 +193,25 @@ class WsMessageDecoder:
         return data_ofs
 
     def _decode_payload(self, data, data_ofs, data_len):
-        n_consumed = min(self.payload_len - self.payload_cursor, data_len - data_ofs)
+        payload_cursor = self.payload_cursor
+        n_consumed = min(self.payload_len - payload_cursor, data_len - data_ofs)
         if self.payload_pbuf:
-            payload_pbuf = self.payload_pbuf
-            payload_cursor = self.payload_cursor
-            if self.payload_masked:
-                payload_mask = self.payload_mask
-                for data_cursor in range(data_ofs, data_ofs + n_consumed):
-                    payload_pbuf[payload_cursor] = data[data_cursor] ^ payload_mask[payload_cursor & 3]
-                    payload_cursor += 1
-            else:
-                payload_pbuf[payload_cursor : payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
+            self.payload_pbuf[payload_cursor : payload_cursor + n_consumed] = data[data_ofs : data_ofs + n_consumed]
         self.payload_cursor += n_consumed
         if self.payload_cursor == self.payload_len:
             self._set_decode_state(MSG_DECODE_DONE)
         return data_ofs + n_consumed
+
+    @staticmethod
+    def _unmask_payload(payload_pbuf, payload_len, payload_mask):
+        payload_len32 = payload_len & ~3
+        if payload_len32:
+            payload_uint32 = memoryview(payload_pbuf)[ : payload_len32 ].cast('I')
+            mask_uint32 = payload_mask[0] | payload_mask[1]<<8 | payload_mask[2]<<16 | payload_mask[3]<<24
+            for i in range(payload_len32 >> 2):
+                payload_uint32[i] ^= mask_uint32
+        for i in range(payload_len - payload_len32):
+            payload_pbuf[payload_len32 + i] ^= payload_mask[i]
 
 class WebSocketClient(Pollable):
     def __init__(self, ws_server):
