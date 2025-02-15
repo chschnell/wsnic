@@ -219,15 +219,15 @@ Start wsnic and direct your browser to your wsnic server using a HTTPS URL like:
 https://localhost:8087
 ```
 
-You will get a security warning that you need to acknowledge once to grant permission permanently. After that you should see a reply page from wsnic's WebSocket server that reads:
+You will get a security warning that you need to acknowledge once to grant permission permanently. After that you should see a reply page from wsnic that reads:
 
 ```
-Failed to open a WebSocket connection: invalid Connection header: keep-alive.
+wsnic proxy server
 
-You cannot access a WebSocket server directly with a browser. You need a WebSocket client.
+HTTP request refused, missing or invalid WebSocket upgrade.
+
+If this request's purpose is to test the TLS certificate: TLS test succeeded.
 ```
-
-This seeming error message is in fact our expected success message here, if you see it then things are working as they should and you can close the browser tab.
 
 ## Source installation
 

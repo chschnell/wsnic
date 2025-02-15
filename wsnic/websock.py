@@ -43,12 +43,13 @@ class HttpHandshakeDecoder:
             return
         handshake_key = self._parse_handshake_request(self.request_buffer, header_stop_ofs)
         if not handshake_key:
+            self.ws_client.refuse_http_handshake()
             self.request_buffer.clear()
             return
         raw_websocket_accept  = handshake_key + WS_MAGIC_UUID
         sha1_websocket_accept = hashlib.sha1(raw_websocket_accept).digest()
         sec_websocket_accept  = base64.b64encode(sha1_websocket_accept)
-        self.ws_client.handle_http_handshake(sec_websocket_accept, memoryview(self.request_buffer)[ header_stop_ofs + 4 : ])
+        self.ws_client.accept_http_handshake(sec_websocket_accept, memoryview(self.request_buffer)[ header_stop_ofs + 4 : ])
 
     def cleanup(self):
         pass
@@ -294,7 +295,26 @@ class WebSocketClient(Pollable):
             self.sock = None
             logger.info(f'{self.addr}: connection closed, reason: {reason}')
 
-    def handle_http_handshake(self, sec_websocket_accept, ws_bytes):
+    def refuse_http_handshake(self):
+        body = '\n'.join([
+            '<!DOCTYPE html>',
+            '<body style="font-size:130%">',
+            '<h3>wsnic proxy server</h3>',
+            '<p>HTTP request refused, missing or invalid WebSocket upgrade.</p>',
+            '<p>If this request\'s purpose is to test the TLS certificate: <b style="color:green">TLS test succeeded</b>.</p>',
+            '</body>'
+        ]).encode()
+        self.outq_pbuf.append(b'\r\n'.join([
+            b'HTTP/1.1 426 Upgrade Required',
+            b'Upgrade: websocket',
+            b'Content-Type: text/html',
+            b'Content-Length: ' + str(len(body)).encode(),
+            b'Connection: close',
+            b'', body]))
+        self.wants_send(True)
+        logger.info(f'{self.addr}: WebSocket client connection refused')
+
+    def accept_http_handshake(self, sec_websocket_accept, ws_bytes):
         ## called by HttpHandshakeDecoder.decode()
         ## send HTTP accept WebSocket handshake response
         self.outq_pbuf.append(b'\r\n'.join([
